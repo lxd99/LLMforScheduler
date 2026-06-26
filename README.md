@@ -29,10 +29,70 @@
 
 求解器输出是 solution JSON，核心字段包括：
 
-- `status`：`feasible`、`optimal`、`infeasible_proven` 等状态。
-- `solver_method`、`strategy`、`solve_seconds`：求解方法、命中策略和耗时。
-- `plan`：按天组织的排班任务，每个任务包含产品、工序、数量、开始/结束分钟、工人和占用设备。
-- `summary`：任务数、使用天数等摘要信息。
+- `status`：求解状态。
+  - `feasible`：已经找到满足当前约束的可行排班，但不保证是全局最优。
+  - `optimal`：当前实现里主要表示库存已经完全抵消需求、无需排产的零任务 case；如果后续使用精确模型并证明最优，也可以用这个状态表达最优证书。
+  - `infeasible_proven`：已经通过容量下界或精确模型证明不可行，例如设备总工时超过可用容量。
+  - `no_solution_found`：在当前策略和时间预算内没有找到可行解，但不代表数学上一定不可行。
+  - `time_limit`：达到时间限制后仍未得到可用结论。
+  - `solver_unavailable`、`model_invalid`、`invalid_input`、`failed`：分别表示求解器依赖不可用、模型构造失败、输入格式非法或其他异常失败。
+- `solver_method`：使用的求解入口。当前批量结果主要是 `timed_greedy`，即带时间预算的多策略贪心；代码中还保留 CP-SAT fallback。
+- `strategy`：实际命中的策略参数。例如 `unit_strategy` 控制先排哪类工序/产品，`worker_strategy` 控制同一时间候选里如何选工人，`day_strategy` 控制排期方向。
+- `solve_seconds`：单条 case 的求解耗时，单位是秒。
+- `plan`：按天组织的排班任务。每个 `day` 下有若干 `tasks`，任务字段包括开始/结束分钟、工人、机器、产品、工序、工序序号、数量和耗时。
+- `summary`：输入规模和粗略复杂度摘要，例如净需求产品数、净需求总件数、工序数、总工时、最大交期、工人数和可用人天数。
+
+一个可解样例是 `SO-2025-05-0006-2`，对应结果文件：
+
+`solver/results/all_machine_capacity_dynamic_chunk25_20260626_tl120/solutions/SO-2025-05-0006-2.solution.json`
+
+该 case 的关键输出如下：
+
+```json
+{
+  "case_id": "SO-2025-05-0006-2",
+  "status": "feasible",
+  "solver_method": "timed_greedy",
+  "strategy": {
+    "unit_strategy": "earliest_due",
+    "worker_strategy": "least_used",
+    "day_strategy": "forward"
+  },
+  "solve_seconds": 0.018801150959916413,
+  "summary": {
+    "product_count": 1,
+    "net_required_total": 6,
+    "step_count": 6,
+    "total_work_minutes": 488.70000000000005,
+    "max_due_day": 22,
+    "worker_count": 12,
+    "worker_day_count": 244,
+    "complexity_score": 2088.7
+  },
+  "plan": [
+    {
+      "day": 1,
+      "tasks": [
+        {
+          "start_minute": 0.0,
+          "end_minute": 20.92,
+          "worker": "张福仙",
+          "machines": ["CMM CONTURA 10/16/6"],
+          "machine": "CMM CONTURA 10/16/6",
+          "material": "6521523",
+          "process": "来料检",
+          "step_index": 1,
+          "quantity": 1,
+          "unit_duration_minutes": 20.92,
+          "duration_minutes": 20.92
+        }
+      ]
+    }
+  ]
+}
+```
+
+这个例子里，`status=feasible` 表示已经找到可行排班；`timed_greedy` 表示由限时多策略贪心解出；`earliest_due + least_used + forward` 表示优先排交期更早的任务、优先选择当前负载较低的工人、从前往后排日期。`summary` 表示库存抵消后还需要生产 1 类产品共 6 件，每件有 6 道工序，总加工工时约 488.7 分钟，最晚交期是第 22 天。`plan` 中第一条任务表示第 1 天 0.00 到 20.92 分钟，由张福仙使用 `CMM CONTURA 10/16/6` 对产品 `6521523` 执行第 1 道工序 `来料检`，加工 1 件。
 
 当前求解器的主要思路：
 
@@ -80,4 +140,3 @@ Verifier 的验证思路：
 - `simple_sampl2.html`：`SO-2023-07-0004-2`，简单样本，48 个任务块。
 - `complex_sample1.html`：`SO-2024-12-0028-2`，复杂样本，520 个任务块。
 - `complex_sample2.html`：`SO-2023-08-0011-2`，复杂样本，1328 个任务块。
-

@@ -1,23 +1,30 @@
 <!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SO-2024-06-0002-2 排班可视化</title><style>
-:root{--bg:#f7f7f4;--paper:#fff;--ink:#222821;--muted:#667064;--line:#d9ded2;--strong:#b7c0b0;--ok:#25784a;--bad:#a23b3b}
+:root{--bg:#f7f7f4;--paper:#fff;--ink:#222821;--muted:#667064;--line:#d9ded2;--strong:#b7c0b0;--ok:#25784a;--bad:#a23b3b;--focus:#315f83}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
-header{padding:22px 28px 16px;background:#fbfbf8;border-bottom:1px solid var(--line)}
+header{padding:18px 24px 14px;background:#fbfbf8;border-bottom:1px solid var(--line)}
 h1{margin:0 0 8px;font-size:24px;letter-spacing:0}
 h2{font-size:18px;margin:0 0 10px}
 h3{font-size:15px;margin:14px 0 6px}
 .meta{display:flex;gap:8px 16px;flex-wrap:wrap;color:var(--muted);font-size:13px}
-main{padding:20px 28px 34px}
-.cards{display:grid;grid-template-columns:repeat(5,minmax(150px,1fr));gap:10px;margin-bottom:18px}
+main{padding:16px 24px 28px}
+.controls{display:flex;gap:10px;align-items:end;flex-wrap:wrap;margin-bottom:14px}
+.control{display:grid;gap:5px;color:var(--muted);font-size:12px}
+.control select{min-width:120px}
+.segmented{display:inline-flex;border:1px solid var(--strong);border-radius:8px;overflow:hidden;background:white}
+.segmented button{height:32px;border:0;border-right:1px solid var(--strong);background:white;padding:0 14px;color:#354035;cursor:pointer}
+.segmented button:last-child{border-right:0}
+.segmented button.active{background:#315f83;color:white}
+.cards{display:grid;grid-template-columns:repeat(6,minmax(130px,1fr));gap:10px;margin-bottom:14px}
 .card{background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:12px;min-height:70px}
 .card span{display:block;color:var(--muted);font-size:12px;margin-bottom:7px}
-.card b{display:block;font-size:18px;overflow-wrap:anywhere}
+.card b{display:block;font-size:17px;overflow-wrap:anywhere}
 .ok b{color:var(--ok)}
 section{margin:0 0 24px}
 .panel{background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:14px;overflow:hidden}
 .scroll{overflow:auto;border:1px solid var(--line);border-radius:8px;background:#fff}
-.timeline{display:grid;grid-template-columns:180px var(--chart-width);min-width:calc(180px + var(--chart-width))}
+.timeline{display:grid;grid-template-columns:190px var(--chart-width);min-width:calc(190px + var(--chart-width))}
 .axis-label,.lane-label{position:sticky;left:0;z-index:5;background:#f1f3ed;border-right:1px solid var(--strong)}
 .axis-label{height:48px;padding:14px 12px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--line)}
 .axis{position:relative;height:48px;background:#fbfbf8;border-bottom:1px solid var(--line)}
@@ -36,25 +43,63 @@ body[data-color="machine"] .task{border-color:color-mix(in srgb,var(--mach),#222
 .toolbar{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:10px}
 .toolbar label{color:var(--muted)}
 select{height:30px;border:1px solid var(--strong);border-radius:6px;background:white;padding:0 8px}
+.empty{padding:18px;color:var(--muted);background:white;border:1px solid var(--line);border-radius:8px}
 .route{margin:0 0 6px 18px;padding:0}
 .route li{margin:4px 0}
 .table-wrap{overflow:auto;border:1px solid var(--line);border-radius:8px}
 table{border-collapse:separate;border-spacing:0;width:100%;min-width:980px;background:white}
 th,td{padding:7px 9px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
 th{position:sticky;top:0;background:#eef1e9;color:#475044;font-size:12px}
+.inventory table{min-width:1120px}
 .source{display:grid;grid-template-columns:90px 1fr;gap:6px 10px;color:var(--muted);font-size:12px;overflow-wrap:anywhere}
 .task-tooltip{position:fixed;z-index:9999;display:none;max-width:360px;padding:10px 12px;border:1px solid #9ea995;border-radius:8px;background:rgba(255,255,252,.98);box-shadow:0 12px 30px rgba(32,40,28,.18);color:#222821;font-size:13px;line-height:1.45;white-space:pre-line;pointer-events:none}
 .task-tooltip b{display:block;margin-bottom:5px;font-size:14px}
 @media(max-width:1100px){main,header{padding-left:16px;padding-right:16px}.cards{grid-template-columns:repeat(2,minmax(130px,1fr))}}
 </style></head>
-<body data-color="process"><header><h1>SO-2024-06-0002-2 排班可视化</h1><div class="meta"><span>生成时间：2026-06-29 20:28:25</span><span>solution：infeasible_proven</span><span>verify：未提供</span><span>机器并发错误：未提供</span><span>排程：无任务</span></div></header><main><section class="cards"><div class="card"><span>Verify</span><b>未提供</b></div><div class="card"><span>机器并发错误</span><b>未提供</b></div><div class="card"><span>Solution</span><b>infeasible_proven</b></div><div class="card"><span>任务数</span><b>0</b></div><div class="card"><span>排程范围</span><b>无任务</b></div><div class="card"><span>最大完成时间</span><b>无任务</b></div><div class="card"><span>订单期限</span><b>Day 18</b></div><div class="card"><span>Solver</span><b>timed_greedy</b></div><div class="card"><span>耗时</span><b>0.095 s</b></div><div class="card"><span>产品/需求</span><b>20010881: 订单 384 / 净需求 355；23165122: 订单 240 / 净需求 240；26151131: 订单 265 / 净需求 220；30151137: 订单 270 / 净需求 215；35155132: 订单 60 / 净需求 60；6521523: 订单 18 / 净需求 18；6521532: 订单 18 / 净需求 18；88828181: 订单 300 / 净需求 300</b></div></section><section><h2>问题摘要</h2><div class="panel"><p><b>库存抵扣：</b>20010881: 库存 29，订单 384，净需求 355；23165122: 库存 0，订单 240，净需求 240；26151131: 库存 45，订单 265，净需求 220；30151137: 库存 55，订单 270，净需求 215；35155132: 库存 0，订单 60，净需求 60；6521523: 库存 0，订单 18，净需求 18；6521532: 库存 0，订单 18，净需求 18；88828181: 库存 0，订单 300，净需求 300</p><h3>产品 20010881</h3><ol class="route"><li><b>1. 来料检</b>：1.86 min/件，设备 无，可选工人 杜青山、何金环</li><li><b>2. 粗加工</b>：1.1 min/件，设备 沈机TC500R，可选工人 尚剑侨、齐书旺、王树滨、王彪</li><li><b>3. 精加工</b>：5.54 min/件，设备 丽驰TX-500, 丽驰TX-1000，可选工人 尚剑侨、齐书旺、王树滨、王彪</li><li><b>4. 巡检</b>：2.19 min/件，设备 无，可选工人 何金环、王培培、杜青山</li><li><b>5. 刻号&amp;包装</b>：1.05 min/件，设备 无，可选工人 何金环、张福仙</li></ol><h3>产品 23165122</h3><ol class="route"><li><b>1. 来料检</b>：18.35 min/件，设备 CMM CONTURA 10/16/6，可选工人 张福仙、王培培、孙淑敏</li><li><b>2. 精加工</b>：14.82 min/件，设备 大侨VL1055，可选工人 王凯、王彪、王树滨、尚剑侨</li><li><b>3. 过程检测</b>：4.27 min/件，设备 CMM CONTURA 10/16/6，可选工人 张福仙、王凯、王彪、王树滨、尚剑侨</li><li><b>4. 后处理</b>：13.55 min/件，设备 无，可选工人 王凯、王彪、王树滨、尚剑侨、王培培、孙淑敏、何金环</li><li><b>5. 清洗&amp;包装</b>：8.69 min/件，设备 超声波清洗机，可选工人 杜青山、单西强、王凯、王彪、袁希广</li></ol><h3>产品 26151131</h3><ol class="route"><li><b>1. 来料检</b>：11.16 min/件，设备 CMM CONTURA 10/16/6，可选工人 张福仙、王培培、孙淑敏</li><li><b>2. 外观验收+镶铜套</b>：3.35 min/件，设备 无，可选工人 袁希广、杜青山、王凯、王培培、孙淑敏</li><li><b>3. 精加工</b>：6.16 min/件，设备 海天VMC1000L，可选工人 王凯、王彪、王树滨、尚剑侨</li><li><b>4. 过程检测</b>：3.88 min/件，设备 CMM CONTURA 10/16/6，可选工人 张福仙、王凯、王彪、王树滨、尚剑侨</li><li><b>5. 后处理</b>：6.01 min/件，设备 无，可选工人 王凯、王彪、王树滨、尚剑侨、王培培、孙淑敏、何金环</li></ol><h3>产品 30151137</h3><ol class="route"><li><b>1. 来料检</b>：17.22 min/件，设备 CMM CONTURA 10/16/6，可选工人 张福仙、王培培、孙淑敏</li><li><b>2. 外观验收+镶铜套</b>：3.42 min/件，设备 无，可选工人 袁希广、杜青山、王凯、王培培、孙淑敏</li><li><b>3. 磨序</b>：3.92 min/件，设备 KEHREN RW8C，可选工人 杜青山、王凯、王彪</li><li><b>4. 精加工</b>：6.28 min/件，设备 海天VMC1000L，可选工人 王凯、王彪、王树滨、尚剑侨</li><li><b>5. 过程检测</b>：3.76 min/件，设备 CMM CONTURA 10/16/6，可选工人 张福仙、王凯、王彪、王树滨、尚剑侨</li><li><b>6. 打孔</b>：3.26 min/件，设备 台钻，可选工人 王培培、孙淑敏、袁希广、杜青山、王凯、王彪</li><li><b>7. 后处理</b>：6.58 min/件，设备 无，可选工人 王凯、王彪、王树滨、尚剑侨、王培培、孙淑敏、何金环</li><li><b>8. 清洗&amp;包装</b>：5.53 min/件，设备 超声波清洗机，可选工人 杜青山、单西强、王凯、王彪、袁希广</li></ol><h3>产品 35155132</h3><ol class="route"><li><b>1. 来料检</b>：13.5 min/件，设备 CMM CONTURA 10/16/6，可选工人 张福仙、王培培、孙淑敏</li><li><b>2. 外观验收+镶铜套</b>：3.17 min/件，设备 无，可选工人 袁希广、杜青山、王凯、王培培、孙淑敏</li><li><b>3. 磨序</b>：5.71 min/件，设备 KEHREN RW8C，可选工人 杜青山、王凯、王彪</li><li><b>4. 精加工</b>：8.44 min/件，设备 海天VMC1000L，可选工人 王凯、王彪、王树滨、尚剑侨</li><li><b>5. 过程检测</b>：4.36 min/件，设备 CMM CONTURA 10/16/6，可选工人 张福仙、王凯、王彪、王树滨、尚剑侨</li><li><b>6. 后处理</b>：6.63 min/件，设备 无，可选工人 王凯、王彪、王树滨、尚剑侨、王培培、孙淑敏、何金环</li><li><b>7. 清洗&amp;包装</b>：6.68 min/件，设备 超声波清洗机，可选工人 杜青山、单西强、王凯、王彪、袁希广</li></ol><h3>产品 6521523</h3><ol class="route"><li><b>1. 来料检</b>：19.31 min/件，设备 CMM CONTURA 10/16/6，可选工人 张福仙、王培培、孙淑敏</li><li><b>2. 外观验收</b>：6.48 min/件，设备 无，可选工人 袁希广、杜青山、王凯、王培培、孙淑敏</li><li><b>3. 精加工</b>：24.33 min/件，设备 丽驰MV1400B，可选工人 王凯、王彪、王树滨、尚剑侨</li><li><b>4. 过程检测</b>：3.98 min/件，设备 CMM CONTURA 10/16/6，可选工人 张福仙、王凯、王彪、王树滨、尚剑侨</li><li><b>5. 后处理</b>：15.19 min/件，设备 无，可选工人 王培培、孙淑敏</li><li><b>6. 清洗&amp;包装</b>：13.03 min/件，设备 超声波清洗机，可选工人 杜青山、单西强、王凯、王彪、袁希广</li></ol><h3>产品 6521532</h3><ol class="route"><li><b>1. 来料检</b>：26.96 min/件，设备 CMM CONTURA 10/16/6，可选工人 张福仙、王培培、孙淑敏</li><li><b>2. 外观验收</b>：8.26 min/件，设备 无，可选工人 袁希广、杜青山、王凯、王培培、孙淑敏</li><li><b>3. 磨序</b>：5.21 min/件，设备 临清, 建德，可选工人 王彪、王凯</li><li><b>4. 精加工</b>：15.21 min/件，设备 马扎克HCN-6000L，可选工人 王彪、尚剑侨</li><li><b>5. 过程检测</b>：16.45 min/件，设备 CMM CONTURA 10/16/6，可选工人 张福仙、王凯、王彪、王树滨、尚剑侨</li><li><b>6. 后处理</b>：21.53 min/件，设备 无，可选工人 王凯、王彪、王树滨、尚剑侨、王培培、孙淑敏、何金环</li><li><b>7. 清洗&amp;包装</b>：13.08 min/件，设备 超声波清洗机，可选工人 杜青山、单西强、王凯、王彪、袁希广</li></ol><h3>产品 88828181</h3><ol class="route"><li><b>1. 来料检</b>：5.22 min/件，设备 无，可选工人 杜青山、何金环</li><li><b>2. 粗加工</b>：0 min/件，设备 沈机TC500R，可选工人 尚剑侨、齐书旺、王树滨、王彪</li><li><b>3. 精加工</b>：4.15 min/件，设备 丽驰TX-500, 丽驰TX-1000，可选工人 尚剑侨、齐书旺、王树滨、王彪</li><li><b>4. 巡检</b>：2.04 min/件，设备 无，可选工人 何金环、王培培、杜青山</li><li><b>5. 刻号&amp;包装</b>：0.54 min/件，设备 无，可选工人 何金环、张福仙</li></ol></div></section><section><div class="toolbar"><h2>按工人看排程</h2><label>颜色 <select class="mode"><option value="process">按工序</option><option value="machine">按机器</option></select></label></div><div class="scroll"><div class="timeline" style="--chart-width:7200px"><div class="axis-label">工人</div><div class="axis" style="width:7200px"><div class="tick dayline" style="left:0.00px"><span>D1</span></div><div class="tick dayline" style="left:400.00px"><span>D2</span></div><div class="tick dayline" style="left:800.00px"><span>D3</span></div><div class="tick dayline" style="left:1200.00px"><span>D4</span></div><div class="tick dayline" style="left:1600.00px"><span>D5</span></div><div class="tick dayline" style="left:2000.00px"><span>D6</span></div><div class="tick dayline" style="left:2400.00px"><span>D7</span></div><div class="tick dayline" style="left:2800.00px"><span>D8</span></div><div class="tick dayline" style="left:3200.00px"><span>D9</span></div><div class="tick dayline" style="left:3600.00px"><span>D10</span></div><div class="tick dayline" style="left:4000.00px"><span>D11</span></div><div class="tick dayline" style="left:4400.00px"><span>D12</span></div><div class="tick dayline" style="left:4800.00px"><span>D13</span></div><div class="tick dayline" style="left:5200.00px"><span>D14</span></div><div class="tick dayline" style="left:5600.00px"><span>D15</span></div><div class="tick dayline" style="left:6000.00px"><span>D16</span></div><div class="tick dayline" style="left:6400.00px"><span>D17</span></div><div class="tick dayline" style="left:6800.00px"><span>D18</span></div><div class="tick dayline" style="left:7200.00px"><span></span></div><div class="tick" style="left:100.00px"><span>120</span></div><div class="tick" style="left:200.00px"><span>240</span></div><div class="tick" style="left:300.00px"><span>360</span></div><div class="tick" style="left:500.00px"><span>120</span></div><div class="tick" style="left:600.00px"><span>240</span></div><div class="tick" style="left:700.00px"><span>360</span></div><div class="tick" style="left:900.00px"><span>120</span></div><div class="tick" style="left:1000.00px"><span>240</span></div><div class="tick" style="left:1100.00px"><span>360</span></div><div class="tick" style="left:1300.00px"><span>120</span></div><div class="tick" style="left:1400.00px"><span>240</span></div><div class="tick" style="left:1500.00px"><span>360</span></div><div class="tick" style="left:1700.00px"><span>120</span></div><div class="tick" style="left:1800.00px"><span>240</span></div><div class="tick" style="left:1900.00px"><span>360</span></div><div class="tick" style="left:2100.00px"><span>120</span></div><div class="tick" style="left:2200.00px"><span>240</span></div><div class="tick" style="left:2300.00px"><span>360</span></div><div class="tick" style="left:2500.00px"><span>120</span></div><div class="tick" style="left:2600.00px"><span>240</span></div><div class="tick" style="left:2700.00px"><span>360</span></div><div class="tick" style="left:2900.00px"><span>120</span></div><div class="tick" style="left:3000.00px"><span>240</span></div><div class="tick" style="left:3100.00px"><span>360</span></div><div class="tick" style="left:3300.00px"><span>120</span></div><div class="tick" style="left:3400.00px"><span>240</span></div><div class="tick" style="left:3500.00px"><span>360</span></div><div class="tick" style="left:3700.00px"><span>120</span></div><div class="tick" style="left:3800.00px"><span>240</span></div><div class="tick" style="left:3900.00px"><span>360</span></div><div class="tick" style="left:4100.00px"><span>120</span></div><div class="tick" style="left:4200.00px"><span>240</span></div><div class="tick" style="left:4300.00px"><span>360</span></div><div class="tick" style="left:4500.00px"><span>120</span></div><div class="tick" style="left:4600.00px"><span>240</span></div><div class="tick" style="left:4700.00px"><span>360</span></div><div class="tick" style="left:4900.00px"><span>120</span></div><div class="tick" style="left:5000.00px"><span>240</span></div><div class="tick" style="left:5100.00px"><span>360</span></div><div class="tick" style="left:5300.00px"><span>120</span></div><div class="tick" style="left:5400.00px"><span>240</span></div><div class="tick" style="left:5500.00px"><span>360</span></div><div class="tick" style="left:5700.00px"><span>120</span></div><div class="tick" style="left:5800.00px"><span>240</span></div><div class="tick" style="left:5900.00px"><span>360</span></div><div class="tick" style="left:6100.00px"><span>120</span></div><div class="tick" style="left:6200.00px"><span>240</span></div><div class="tick" style="left:6300.00px"><span>360</span></div><div class="tick" style="left:6500.00px"><span>120</span></div><div class="tick" style="left:6600.00px"><span>240</span></div><div class="tick" style="left:6700.00px"><span>360</span></div><div class="tick" style="left:6900.00px"><span>120</span></div><div class="tick" style="left:7000.00px"><span>240</span></div><div class="tick" style="left:7100.00px"><span>360</span></div></div><div class="lane-label" style="height:42px"><b>何金环</b><span>0 项 / 0 min</span></div><div class="lane" style="width:7200px;height:42px"></div><div class="lane-label" style="height:42px"><b>单西强</b><span>0 项 / 0 min</span></div><div class="lane" style="width:7200px;height:42px"></div><div class="lane-label" style="height:42px"><b>孙淑敏</b><span>0 项 / 0 min</span></div><div class="lane" style="width:7200px;height:42px"></div><div class="lane-label" style="height:42px"><b>尚剑侨</b><span>0 项 / 0 min</span></div><div class="lane" style="width:7200px;height:42px"></div><div class="lane-label" style="height:42px"><b>张福仙</b><span>0 项 / 0 min</span></div><div class="lane" style="width:7200px;height:42px"></div><div class="lane-label" style="height:42px"><b>杜青山</b><span>0 项 / 0 min</span></div><div class="lane" style="width:7200px;height:42px"></div><div class="lane-label" style="height:42px"><b>王凯</b><span>0 项 / 0 min</span></div><div class="lane" style="width:7200px;height:42px"></div><div class="lane-label" style="height:42px"><b>王培培</b><span>0 项 / 0 min</span></div><div class="lane" style="width:7200px;height:42px"></div><div class="lane-label" style="height:42px"><b>王彪</b><span>0 项 / 0 min</span></div><div class="lane" style="width:7200px;height:42px"></div><div class="lane-label" style="height:42px"><b>王树滨</b><span>0 项 / 0 min</span></div><div class="lane" style="width:7200px;height:42px"></div><div class="lane-label" style="height:42px"><b>袁希广</b><span>0 项 / 0 min</span></div><div class="lane" style="width:7200px;height:42px"></div><div class="lane-label" style="height:42px"><b>齐书旺</b><span>0 项 / 0 min</span></div><div class="lane" style="width:7200px;height:42px"></div></div></div></section><section><div class="toolbar"><h2>按机器看排程</h2><label>颜色 <select class="mode"><option value="process">按工序</option><option value="machine">按机器</option></select></label></div><div class="scroll"><div class="timeline" style="--chart-width:7200px"><div class="axis-label">机器</div><div class="axis" style="width:7200px"><div class="tick dayline" style="left:0.00px"><span>D1</span></div><div class="tick dayline" style="left:400.00px"><span>D2</span></div><div class="tick dayline" style="left:800.00px"><span>D3</span></div><div class="tick dayline" style="left:1200.00px"><span>D4</span></div><div class="tick dayline" style="left:1600.00px"><span>D5</span></div><div class="tick dayline" style="left:2000.00px"><span>D6</span></div><div class="tick dayline" style="left:2400.00px"><span>D7</span></div><div class="tick dayline" style="left:2800.00px"><span>D8</span></div><div class="tick dayline" style="left:3200.00px"><span>D9</span></div><div class="tick dayline" style="left:3600.00px"><span>D10</span></div><div class="tick dayline" style="left:4000.00px"><span>D11</span></div><div class="tick dayline" style="left:4400.00px"><span>D12</span></div><div class="tick dayline" style="left:4800.00px"><span>D13</span></div><div class="tick dayline" style="left:5200.00px"><span>D14</span></div><div class="tick dayline" style="left:5600.00px"><span>D15</span></div><div class="tick dayline" style="left:6000.00px"><span>D16</span></div><div class="tick dayline" style="left:6400.00px"><span>D17</span></div><div class="tick dayline" style="left:6800.00px"><span>D18</span></div><div class="tick dayline" style="left:7200.00px"><span></span></div><div class="tick" style="left:100.00px"><span>120</span></div><div class="tick" style="left:200.00px"><span>240</span></div><div class="tick" style="left:300.00px"><span>360</span></div><div class="tick" style="left:500.00px"><span>120</span></div><div class="tick" style="left:600.00px"><span>240</span></div><div class="tick" style="left:700.00px"><span>360</span></div><div class="tick" style="left:900.00px"><span>120</span></div><div class="tick" style="left:1000.00px"><span>240</span></div><div class="tick" style="left:1100.00px"><span>360</span></div><div class="tick" style="left:1300.00px"><span>120</span></div><div class="tick" style="left:1400.00px"><span>240</span></div><div class="tick" style="left:1500.00px"><span>360</span></div><div class="tick" style="left:1700.00px"><span>120</span></div><div class="tick" style="left:1800.00px"><span>240</span></div><div class="tick" style="left:1900.00px"><span>360</span></div><div class="tick" style="left:2100.00px"><span>120</span></div><div class="tick" style="left:2200.00px"><span>240</span></div><div class="tick" style="left:2300.00px"><span>360</span></div><div class="tick" style="left:2500.00px"><span>120</span></div><div class="tick" style="left:2600.00px"><span>240</span></div><div class="tick" style="left:2700.00px"><span>360</span></div><div class="tick" style="left:2900.00px"><span>120</span></div><div class="tick" style="left:3000.00px"><span>240</span></div><div class="tick" style="left:3100.00px"><span>360</span></div><div class="tick" style="left:3300.00px"><span>120</span></div><div class="tick" style="left:3400.00px"><span>240</span></div><div class="tick" style="left:3500.00px"><span>360</span></div><div class="tick" style="left:3700.00px"><span>120</span></div><div class="tick" style="left:3800.00px"><span>240</span></div><div class="tick" style="left:3900.00px"><span>360</span></div><div class="tick" style="left:4100.00px"><span>120</span></div><div class="tick" style="left:4200.00px"><span>240</span></div><div class="tick" style="left:4300.00px"><span>360</span></div><div class="tick" style="left:4500.00px"><span>120</span></div><div class="tick" style="left:4600.00px"><span>240</span></div><div class="tick" style="left:4700.00px"><span>360</span></div><div class="tick" style="left:4900.00px"><span>120</span></div><div class="tick" style="left:5000.00px"><span>240</span></div><div class="tick" style="left:5100.00px"><span>360</span></div><div class="tick" style="left:5300.00px"><span>120</span></div><div class="tick" style="left:5400.00px"><span>240</span></div><div class="tick" style="left:5500.00px"><span>360</span></div><div class="tick" style="left:5700.00px"><span>120</span></div><div class="tick" style="left:5800.00px"><span>240</span></div><div class="tick" style="left:5900.00px"><span>360</span></div><div class="tick" style="left:6100.00px"><span>120</span></div><div class="tick" style="left:6200.00px"><span>240</span></div><div class="tick" style="left:6300.00px"><span>360</span></div><div class="tick" style="left:6500.00px"><span>120</span></div><div class="tick" style="left:6600.00px"><span>240</span></div><div class="tick" style="left:6700.00px"><span>360</span></div><div class="tick" style="left:6900.00px"><span>120</span></div><div class="tick" style="left:7000.00px"><span>240</span></div><div class="tick" style="left:7100.00px"><span>360</span></div></div><div class="lane-label" style="height:42px"><b>CMM CONTURA 10/16/6 #1</b><span>0 项 / 0 min</span></div><div class="lane" style="width:7200px;height:42px"></div><div class="lane-label" style="height:42px"><b>CX-40Y车铣复合 #1</b><span>0 项 / 0 min</span></div><div class="lane" style="width:7200px;height:42px"></div><div class="lane-label" style="height:42px"><b>HCL360 #1</b><span>0 项 / 0 min</span></div><div class="lane" style="width:7200px;height:42px"></div><div class="lane-label" style="height:42px"><b>HCL360 #2</b><span>0 项 / 0 min</span></div><div class="lane" style="width:7200px;height:42px"></div><div class="lane-label" style="height:42px"><b>HCL360 #3</b><span>0 项 / 0 min</span></div><div class="lane" style="width:7200px;height:42px"></div><div class="lane-label" style="height:42px"><b>KEHREN RW8C #1</b><span>0 项 / 0 min</span></div><div class="lane" style="width:7200px;height:42px"></div><div class="lane-label" style="height:42px"><b>临清 #1</b><span>0 项 / 0 min</span></div><div class="lane" style="width:7200px;height:42px"></div><div class="lane-label" style="height:42px"><b>丽驰MV1400B #1</b><span>0 项 / 0 min</span></div><div class="lane" style="width:7200px;height:42px"></div><div class="lane-label" style="height:42px"><b>丽驰MV1400B #2</b><span>0 项 / 0 min</span></div><div class="lane" style="width:7200px;height:42px"></div><div class="lane-label" style="height:42px"><b>丽驰TX-1000 #1</b><span>0 项 / 0 min</span></div><div class="lane" style="width:7200px;height:42px"></div><div class="lane-label" style="height:42px"><b>丽驰TX-1000 #2</b><span>0 项 / 0 min</span></div><div class="lane" style="width:7200px;height:42px"></div><div class="lane-label" style="height:42px"><b>丽驰TX-500 #1</b><span>0 项 / 0 min</span></div><div class="lane" style="width:7200px;height:42px"></div><div class="lane-label" style="height:42px"><b>丽驰TX-500 #2</b><span>0 项 / 0 min</span></div><div class="lane" style="width:7200px;height:42px"></div><div class="lane-label" style="height:42px"><b>丽驰TX-500 #3</b><span>0 项 / 0 min</span></div><div class="lane" style="width:7200px;height:42px"></div><div class="lane-label" style="height:42px"><b>丽驰TX-500 #4</b><span>0 项 / 0 min</span></div><div class="lane" style="width:7200px;height:42px"></div><div class="lane-label" style="height:42px"><b>台钻 #1</b><span>0 项 / 0 min</span></div><div class="lane" style="width:7200px;height:42px"></div><div class="lane-label" style="height:42px"><b>大侨VL1055 #1</b><span>0 项 / 0 min</span></div><div class="lane" style="width:7200px;height:42px"></div><div class="lane-label" style="height:42px"><b>建德 #1</b><span>0 项 / 0 min</span></div><div class="lane" style="width:7200px;height:42px"></div><div class="lane-label" style="height:42px"><b>沈机TC500R #1</b><span>0 项 / 0 min</span></div><div class="lane" style="width:7200px;height:42px"></div><div class="lane-label" style="height:42px"><b>沈机TC500R #2</b><span>0 项 / 0 min</span></div><div class="lane" style="width:7200px;height:42px"></div><div class="lane-label" style="height:42px"><b>海天VMC1000L #1</b><span>0 项 / 0 min</span></div><div class="lane" style="width:7200px;height:42px"></div><div class="lane-label" style="height:42px"><b>海天VMC1000L #2</b><span>0 项 / 0 min</span></div><div class="lane" style="width:7200px;height:42px"></div><div class="lane-label" style="height:42px"><b>海天VMC1000L #3</b><span>0 项 / 0 min</span></div><div class="lane" style="width:7200px;height:42px"></div><div class="lane-label" style="height:42px"><b>海天VMC1000L #4</b><span>0 项 / 0 min</span></div><div class="lane" style="width:7200px;height:42px"></div><div class="lane-label" style="height:42px"><b>海德曼T45 #1</b><span>0 项 / 0 min</span></div><div class="lane" style="width:7200px;height:42px"></div><div class="lane-label" style="height:42px"><b>超声波清洗机 #1</b><span>0 项 / 0 min</span></div><div class="lane" style="width:7200px;height:42px"></div><div class="lane-label" style="height:42px"><b>锯床 #1</b><span>0 项 / 0 min</span></div><div class="lane" style="width:7200px;height:42px"></div><div class="lane-label" style="height:42px"><b>马扎克HCN-6000L #1</b><span>0 项 / 0 min</span></div><div class="lane" style="width:7200px;height:42px"></div><div class="lane-label" style="height:42px"><b>马扎克VCN535L #1</b><span>0 项 / 0 min</span></div><div class="lane" style="width:7200px;height:42px"></div></div></div></section><section><h2>任务明细</h2><div class="table-wrap"><table><thead><tr><th>#</th><th>Day</th><th>时间</th><th>产品</th><th>Step</th><th>工序</th><th>数量</th><th>工人</th><th>机器</th><th>时长</th></tr></thead><tbody></tbody></table></div></section><section><h2>文件来源</h2><div class="panel source"><b>问题</b><span>/wenyu/media-wenyu-data/TianjinLLM/raw_orders/SO-2024-06-0002-2.json</span><b>解</b><span>/wenyu/media-wenyu-data/TianjinLLM/results/raw_view/all_machine_capacity_dynamic_chunk25_20260626_tl120/solutions/SO-2024-06-0002-2.solution.json</span><b>Verify</b><span>未提供</span></div></section></main><script>
+<body data-color="process"><header><h1>SO-2024-06-0002-2 排班可视化</h1><div class="meta"><span>生成时间：2026-06-30 11:14:30</span><span>solution：infeasible_proven</span><span>verify：未提供</span><span>机器并发错误：未提供</span><span>排程：无任务</span></div></header><main><section class="controls"><label class="control">Day<select id="daySelect"></select></label><label class="control">颜色<select id="colorSelect"><option value="process">按工序</option><option value="machine">按机器</option></select></label><div class="control"><span>View</span><div class="segmented"><button type="button" class="active" data-view="worker">工人</button><button type="button" data-view="machine">机器</button><button type="button" data-view="task">任务</button></div></div></section><section id="cards" class="cards"></section><section class="inventory"><h2>当日产出和余量</h2><div id="inventory"></div></section><section><div class="toolbar"><h2>排班甘特图</h2></div><div id="chart"></div></section><section><h2>当天任务顺序</h2><div id="taskTable"></div></section><div id="errors"></div><section><h2>文件来源</h2><div class="panel source"><b>问题</b><span>/wenyu/media-wenyu-data/TianjinLLM/raw_orders/SO-2024-06-0002-2.json</span><b>解</b><span>/wenyu/media-wenyu-data/TianjinLLM/results/raw_view/all_machine_capacity_dynamic_chunk25_20260626_tl120/solutions/SO-2024-06-0002-2.solution.json</span><b>Verify</b><span>未提供</span></div></section></main><script>
+const CASE={"case_id":"SO-2024-06-0002-2","status":"infeasible_proven","verify_status":"未提供","machine_error_count":"未提供","solver_method":"timed_greedy","strategy":null,"solve_seconds":0.09524705598596483,"summary":{"case_id":"SO-2024-06-0002-2","path":"/wenyu/media-wenyu-data/TianjinLLM/raw_orders/SO-2024-06-0002-2.json","product_count":8,"net_required_total":1426,"step_count":48,"total_work_minutes":45854.409999999996,"max_due_day":18,"worker_count":12,"worker_day_count":197,"complexity_score":58654.409999999996},"errors":["设备 CMM CONTURA 10/16/6 总工时超过可用容量：15520.500000 > 8640.000000"],"days":[1],"max_due_day":18,"workers":["何金环","单西强","孙淑敏","尚剑侨","张福仙","杜青山","王凯","王培培","王彪","王树滨","袁希广","齐书旺"],"machines":{"海德曼T45":1,"CX-40Y车铣复合":1,"HCL360":3,"建德":1,"KEHREN RW8C":1,"临清":1,"沈机TC500R":2,"海天VMC1000L":4,"大侨VL1055":1,"马扎克VCN535L":1,"丽驰MV1400B":2,"丽驰TX-1000":2,"丽驰TX-500":4,"马扎克HCN-6000L":1,"台钻":1,"CMM CONTURA 10/16/6":1,"锯床":1,"超声波清洗机":1},"requirements":{"20010881":{"required":384,"net_required":355,"initial_inventory":29,"due":[{"day":18,"quantity":355}]},"23165122":{"required":240,"net_required":240,"initial_inventory":0,"due":[{"day":18,"quantity":240}]},"26151131":{"required":265,"net_required":220,"initial_inventory":45,"due":[{"day":18,"quantity":220}]},"30151137":{"required":270,"net_required":215,"initial_inventory":55,"due":[{"day":18,"quantity":215}]},"35155132":{"required":60,"net_required":60,"initial_inventory":0,"due":[{"day":18,"quantity":60}]},"6521523":{"required":18,"net_required":18,"initial_inventory":0,"due":[{"day":18,"quantity":18}]},"6521532":{"required":18,"net_required":18,"initial_inventory":0,"due":[{"day":18,"quantity":18}]},"88828181":{"required":300,"net_required":300,"initial_inventory":0,"due":[{"day":18,"quantity":300}]}},"inventory_by_day":{"1":[{"product_id":"20010881","initial_inventory":29,"required":384,"net_required":355,"start_available":29,"start_remaining":355,"produced_today":0,"end_available":29,"end_remaining":355,"due":[{"day":18,"quantity":355}]},{"product_id":"23165122","initial_inventory":0,"required":240,"net_required":240,"start_available":0,"start_remaining":240,"produced_today":0,"end_available":0,"end_remaining":240,"due":[{"day":18,"quantity":240}]},{"product_id":"26151131","initial_inventory":45,"required":265,"net_required":220,"start_available":45,"start_remaining":220,"produced_today":0,"end_available":45,"end_remaining":220,"due":[{"day":18,"quantity":220}]},{"product_id":"30151137","initial_inventory":55,"required":270,"net_required":215,"start_available":55,"start_remaining":215,"produced_today":0,"end_available":55,"end_remaining":215,"due":[{"day":18,"quantity":215}]},{"product_id":"35155132","initial_inventory":0,"required":60,"net_required":60,"start_available":0,"start_remaining":60,"produced_today":0,"end_available":0,"end_remaining":60,"due":[{"day":18,"quantity":60}]},{"product_id":"6521523","initial_inventory":0,"required":18,"net_required":18,"start_available":0,"start_remaining":18,"produced_today":0,"end_available":0,"end_remaining":18,"due":[{"day":18,"quantity":18}]},{"product_id":"6521532","initial_inventory":0,"required":18,"net_required":18,"start_available":0,"start_remaining":18,"produced_today":0,"end_available":0,"end_remaining":18,"due":[{"day":18,"quantity":18}]},{"product_id":"88828181","initial_inventory":0,"required":300,"net_required":300,"start_available":0,"start_remaining":300,"produced_today":0,"end_available":0,"end_remaining":300,"due":[{"day":18,"quantity":300}]}]},"tasks":[],"routes":{"20010881":[{"step_index":1,"process":"来料检","duration_minutes":1.86,"machines":["无"],"workers":["杜青山","何金环"]},{"step_index":2,"process":"粗加工","duration_minutes":1.1,"machines":["沈机TC500R"],"workers":["尚剑侨","齐书旺","王树滨","王彪"]},{"step_index":3,"process":"精加工","duration_minutes":5.54,"machines":["丽驰TX-500","丽驰TX-1000"],"workers":["尚剑侨","齐书旺","王树滨","王彪"]},{"step_index":4,"process":"巡检","duration_minutes":2.19,"machines":["无"],"workers":["何金环","王培培","杜青山"]},{"step_index":5,"process":"刻号&包装","duration_minutes":1.05,"machines":["无"],"workers":["何金环","张福仙"]}],"23165122":[{"step_index":1,"process":"来料检","duration_minutes":18.35,"machines":["CMM CONTURA 10/16/6"],"workers":["张福仙","王培培","孙淑敏"]},{"step_index":2,"process":"精加工","duration_minutes":14.82,"machines":["大侨VL1055"],"workers":["王凯","王彪","王树滨","尚剑侨"]},{"step_index":3,"process":"过程检测","duration_minutes":4.27,"machines":["CMM CONTURA 10/16/6"],"workers":["张福仙","王凯","王彪","王树滨","尚剑侨"]},{"step_index":4,"process":"后处理","duration_minutes":13.55,"machines":["无"],"workers":["王凯","王彪","王树滨","尚剑侨","王培培","孙淑敏","何金环"]},{"step_index":5,"process":"清洗&包装","duration_minutes":8.69,"machines":["超声波清洗机"],"workers":["杜青山","单西强","王凯","王彪","袁希广"]}],"26151131":[{"step_index":1,"process":"来料检","duration_minutes":11.16,"machines":["CMM CONTURA 10/16/6"],"workers":["张福仙","王培培","孙淑敏"]},{"step_index":2,"process":"外观验收+镶铜套","duration_minutes":3.35,"machines":["无"],"workers":["袁希广","杜青山","王凯","王培培","孙淑敏"]},{"step_index":3,"process":"精加工","duration_minutes":6.16,"machines":["海天VMC1000L"],"workers":["王凯","王彪","王树滨","尚剑侨"]},{"step_index":4,"process":"过程检测","duration_minutes":3.88,"machines":["CMM CONTURA 10/16/6"],"workers":["张福仙","王凯","王彪","王树滨","尚剑侨"]},{"step_index":5,"process":"后处理","duration_minutes":6.01,"machines":["无"],"workers":["王凯","王彪","王树滨","尚剑侨","王培培","孙淑敏","何金环"]}],"30151137":[{"step_index":1,"process":"来料检","duration_minutes":17.22,"machines":["CMM CONTURA 10/16/6"],"workers":["张福仙","王培培","孙淑敏"]},{"step_index":2,"process":"外观验收+镶铜套","duration_minutes":3.42,"machines":["无"],"workers":["袁希广","杜青山","王凯","王培培","孙淑敏"]},{"step_index":3,"process":"磨序","duration_minutes":3.92,"machines":["KEHREN RW8C"],"workers":["杜青山","王凯","王彪"]},{"step_index":4,"process":"精加工","duration_minutes":6.28,"machines":["海天VMC1000L"],"workers":["王凯","王彪","王树滨","尚剑侨"]},{"step_index":5,"process":"过程检测","duration_minutes":3.76,"machines":["CMM CONTURA 10/16/6"],"workers":["张福仙","王凯","王彪","王树滨","尚剑侨"]},{"step_index":6,"process":"打孔","duration_minutes":3.26,"machines":["台钻"],"workers":["王培培","孙淑敏","袁希广","杜青山","王凯","王彪"]},{"step_index":7,"process":"后处理","duration_minutes":6.58,"machines":["无"],"workers":["王凯","王彪","王树滨","尚剑侨","王培培","孙淑敏","何金环"]},{"step_index":8,"process":"清洗&包装","duration_minutes":5.53,"machines":["超声波清洗机"],"workers":["杜青山","单西强","王凯","王彪","袁希广"]}],"35155132":[{"step_index":1,"process":"来料检","duration_minutes":13.5,"machines":["CMM CONTURA 10/16/6"],"workers":["张福仙","王培培","孙淑敏"]},{"step_index":2,"process":"外观验收+镶铜套","duration_minutes":3.17,"machines":["无"],"workers":["袁希广","杜青山","王凯","王培培","孙淑敏"]},{"step_index":3,"process":"磨序","duration_minutes":5.71,"machines":["KEHREN RW8C"],"workers":["杜青山","王凯","王彪"]},{"step_index":4,"process":"精加工","duration_minutes":8.44,"machines":["海天VMC1000L"],"workers":["王凯","王彪","王树滨","尚剑侨"]},{"step_index":5,"process":"过程检测","duration_minutes":4.36,"machines":["CMM CONTURA 10/16/6"],"workers":["张福仙","王凯","王彪","王树滨","尚剑侨"]},{"step_index":6,"process":"后处理","duration_minutes":6.63,"machines":["无"],"workers":["王凯","王彪","王树滨","尚剑侨","王培培","孙淑敏","何金环"]},{"step_index":7,"process":"清洗&包装","duration_minutes":6.68,"machines":["超声波清洗机"],"workers":["杜青山","单西强","王凯","王彪","袁希广"]}],"6521523":[{"step_index":1,"process":"来料检","duration_minutes":19.31,"machines":["CMM CONTURA 10/16/6"],"workers":["张福仙","王培培","孙淑敏"]},{"step_index":2,"process":"外观验收","duration_minutes":6.48,"machines":["无"],"workers":["袁希广","杜青山","王凯","王培培","孙淑敏"]},{"step_index":3,"process":"精加工","duration_minutes":24.33,"machines":["丽驰MV1400B"],"workers":["王凯","王彪","王树滨","尚剑侨"]},{"step_index":4,"process":"过程检测","duration_minutes":3.98,"machines":["CMM CONTURA 10/16/6"],"workers":["张福仙","王凯","王彪","王树滨","尚剑侨"]},{"step_index":5,"process":"后处理","duration_minutes":15.19,"machines":["无"],"workers":["王培培","孙淑敏"]},{"step_index":6,"process":"清洗&包装","duration_minutes":13.03,"machines":["超声波清洗机"],"workers":["杜青山","单西强","王凯","王彪","袁希广"]}],"6521532":[{"step_index":1,"process":"来料检","duration_minutes":26.96,"machines":["CMM CONTURA 10/16/6"],"workers":["张福仙","王培培","孙淑敏"]},{"step_index":2,"process":"外观验收","duration_minutes":8.26,"machines":["无"],"workers":["袁希广","杜青山","王凯","王培培","孙淑敏"]},{"step_index":3,"process":"磨序","duration_minutes":5.21,"machines":["临清","建德"],"workers":["王彪","王凯"]},{"step_index":4,"process":"精加工","duration_minutes":15.21,"machines":["马扎克HCN-6000L"],"workers":["王彪","尚剑侨"]},{"step_index":5,"process":"过程检测","duration_minutes":16.45,"machines":["CMM CONTURA 10/16/6"],"workers":["张福仙","王凯","王彪","王树滨","尚剑侨"]},{"step_index":6,"process":"后处理","duration_minutes":21.53,"machines":["无"],"workers":["王凯","王彪","王树滨","尚剑侨","王培培","孙淑敏","何金环"]},{"step_index":7,"process":"清洗&包装","duration_minutes":13.08,"machines":["超声波清洗机"],"workers":["杜青山","单西强","王凯","王彪","袁希广"]}],"88828181":[{"step_index":1,"process":"来料检","duration_minutes":5.22,"machines":["无"],"workers":["杜青山","何金环"]},{"step_index":2,"process":"粗加工","duration_minutes":0.0,"machines":["沈机TC500R"],"workers":["尚剑侨","齐书旺","王树滨","王彪"]},{"step_index":3,"process":"精加工","duration_minutes":4.15,"machines":["丽驰TX-500","丽驰TX-1000"],"workers":["尚剑侨","齐书旺","王树滨","王彪"]},{"step_index":4,"process":"巡检","duration_minutes":2.04,"machines":["无"],"workers":["何金环","王培培","杜青山"]},{"step_index":5,"process":"刻号&包装","duration_minutes":0.54,"machines":["无"],"workers":["何金环","张福仙"]}]},"source":{"order":"/wenyu/media-wenyu-data/TianjinLLM/raw_orders/SO-2024-06-0002-2.json","solution":"/wenyu/media-wenyu-data/TianjinLLM/results/raw_view/all_machine_capacity_dynamic_chunk25_20260626_tl120/solutions/SO-2024-06-0002-2.solution.json","verify":null}};
+const WORKER_DAY_MINUTES=480.0;
+const NO_MACHINE_LABEL="无设备";
+const PALETTE=["#4e79a7","#f28e2b","#59a14f","#e15759","#76b7b2","#edc948","#b07aa1","#ff9da7","#9c755f","#bab0ac","#2f6f73","#8c6d31"];
+let currentView='worker';
 const body=document.body;
-document.querySelectorAll('.mode').forEach(select=>{
-  select.addEventListener('change',()=>{body.dataset.color=select.value;document.querySelectorAll('.mode').forEach(other=>{other.value=select.value;});});
-});
+const daySelect=document.getElementById('daySelect');
+const colorSelect=document.getElementById('colorSelect');
+const viewButtons=[...document.querySelectorAll('[data-view]')];
 const taskTooltip=document.createElement('div');
 taskTooltip.className='task-tooltip';
 document.body.appendChild(taskTooltip);
+function escapeHtml(value){
+  return String(value ?? '').replace(/[&<>"']/g, ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+}
+function fmt(value,digits=2){
+  const number=Number(value);
+  if(!Number.isFinite(number)) return String(value ?? '');
+  if(Math.abs(number-Math.round(number))<1e-9) return String(Math.round(number));
+  return number.toFixed(digits).replace(/\.0+$/,'').replace(/(\.\d*?)0+$/,'$1');
+}
+function colorMap(values){
+  const names=[...new Set(values.filter(Boolean))].sort();
+  const map={};
+  names.forEach((name,index)=>{map[name]=PALETTE[index%PALETTE.length];});
+  return map;
+}
+const processColors=colorMap(CASE.tasks.map(task=>task.process || '未知工序'));
+const machineColors=colorMap(CASE.tasks.flatMap(task=>(task.machine_copy_labels || [NO_MACHINE_LABEL]).map(label=>label.split(' #')[0])));
+function taskTooltipText(task){
+  const step=task.step_index ?? '?';
+  const machines=(task.machine_copy_labels && task.machine_copy_labels.length ? task.machine_copy_labels : [NO_MACHINE_LABEL]).join(', ');
+  return [
+    `任务 #${task.index}`,
+    `产品：${task.product_id}`,
+    `工序：${step}. ${task.process}`,
+    `数量：${task.quantity}`,
+    `工人：${task.worker || '未知'}`,
+    `机器：${machines}`,
+    `时间：Day ${task.day} ${fmt(task.start_minute)}-${fmt(task.end_minute)} min`,
+    `总时长：${fmt(task.duration_minutes)} min`
+  ].join('\n');
+}
 function placeTaskTooltip(event){
   const pad=14;
   taskTooltip.style.display='block';
@@ -66,17 +111,187 @@ function placeTaskTooltip(event){
   taskTooltip.style.left=Math.max(8,left)+'px';
   taskTooltip.style.top=Math.max(8,top)+'px';
 }
-document.querySelectorAll('.task').forEach(task=>{
-  task.addEventListener('mouseenter',event=>{
+function attachTooltip(element,task){
+  element.addEventListener('mouseenter',event=>{
     const title=document.createElement('b');
     title.textContent='任务详情';
-    const body=document.createElement('div');
-    body.textContent=task.dataset.tooltip||'';
+    const content=document.createElement('div');
+    content.textContent=taskTooltipText(task);
     taskTooltip.textContent='';
-    taskTooltip.append(title,body);
+    taskTooltip.append(title,content);
     placeTaskTooltip(event);
   });
-  task.addEventListener('mousemove',placeTaskTooltip);
-  task.addEventListener('mouseleave',()=>{taskTooltip.style.display='none';});
+  element.addEventListener('mousemove',placeTaskTooltip);
+  element.addEventListener('mouseleave',()=>{taskTooltip.style.display='none';});
+}
+function laneStats(tasks){
+  const duration=tasks.reduce((total,task)=>total+Math.max(Number(task.end_minute)-Number(task.start_minute),0),0);
+  return `${tasks.length} 项 / ${fmt(duration)} min`;
+}
+function dayTasks(){
+  const day=Number(daySelect.value || CASE.days[0] || 1);
+  return CASE.tasks.filter(task=>Number(task.day)===day).sort((a,b)=>a.start_minute-b.start_minute || a.end_minute-b.end_minute || a.index-b.index);
+}
+function buildWorkerLanes(tasks){
+  const grouped=new Map();
+  tasks.forEach(task=>{
+    const key=task.worker || '未知工人';
+    if(!grouped.has(key)) grouped.set(key,[]);
+    grouped.get(key).push(task);
+  });
+  const names=[...new Set([...(CASE.workers || []),...grouped.keys()])].sort();
+  return names.map(name=>[name,grouped.get(name) || []]);
+}
+function buildMachineLanes(tasks){
+  const grouped=new Map();
+  tasks.forEach(task=>{
+    const labels=task.machine_copy_labels && task.machine_copy_labels.length ? task.machine_copy_labels : [NO_MACHINE_LABEL];
+    labels.forEach(label=>{
+      if(!grouped.has(label)) grouped.set(label,[]);
+      grouped.get(label).push(task);
+    });
+  });
+  const names=[];
+  if(grouped.has(NO_MACHINE_LABEL)) names.push(NO_MACHINE_LABEL);
+  Object.keys(CASE.machines || {}).sort().forEach(machine=>{
+    const count=Math.max(Number(CASE.machines[machine]) || 1,1);
+    for(let index=1;index<=count;index++) names.push(`${machine} #${index}`);
+  });
+  [...grouped.keys()].sort().forEach(name=>{if(!names.includes(name)) names.push(name);});
+  return names.map(name=>[name,grouped.get(name) || []]);
+}
+function buildTaskLanes(tasks){
+  const grouped=new Map();
+  tasks.forEach(task=>{
+    const key=task.product_id || '未知产品';
+    if(!grouped.has(key)) grouped.set(key,[]);
+    grouped.get(key).push(task);
+  });
+  const names=[...new Set([...Object.keys(CASE.requirements || {}),...grouped.keys()])].sort();
+  return names.map(name=>[name,grouped.get(name) || []]);
+}
+function axisHtml(width){
+  const scale=width/WORKER_DAY_MINUTES;
+  let html='';
+  for(let minute=0;minute<=WORKER_DAY_MINUTES;minute+=60){
+    html+=`<div class="tick ${minute===0?'dayline':''}" style="left:${(minute*scale).toFixed(2)}px"><span>${minute}</span></div>`;
+  }
+  return html;
+}
+function renderTask(task,left,width,top){
+  const step=task.step_index ?? '?';
+  const machines=(task.machine_copy_labels && task.machine_copy_labels.length ? task.machine_copy_labels : [NO_MACHINE_LABEL]).join(', ');
+  const machineKey=(task.machine_copy_labels && task.machine_copy_labels[0] ? task.machine_copy_labels[0].split(' #')[0] : NO_MACHINE_LABEL);
+  const el=document.createElement('div');
+  el.className='task';
+  el.style.left=`${left.toFixed(2)}px`;
+  el.style.width=`${width.toFixed(2)}px`;
+  el.style.top=`${top.toFixed(2)}px`;
+  el.style.setProperty('--proc',processColors[task.process || '未知工序'] || PALETTE[0]);
+  el.style.setProperty('--mach',machineColors[machineKey] || PALETTE[1]);
+  el.innerHTML=`<span>${escapeHtml(`${step}. ${task.process} x${task.quantity}`)}</span><small>${escapeHtml(`${task.product_id} · ${machines}`)}</small>`;
+  attachTooltip(el,task);
+  return el;
+}
+function renderTimeline(){
+  const tasks=dayTasks();
+  let lanes;
+  let laneTitle;
+  if(currentView==='machine'){lanes=buildMachineLanes(tasks);laneTitle='机器';}
+  else if(currentView==='task'){lanes=buildTaskLanes(tasks);laneTitle='产品';}
+  else{lanes=buildWorkerLanes(tasks);laneTitle='工人';}
+  const chart=document.getElementById('chart');
+  const width=1440;
+  const scale=width/WORKER_DAY_MINUTES;
+  if(tasks.length===0){
+    chart.innerHTML='<div class="empty">无排班任务</div>';
+    return;
+  }
+  chart.innerHTML=`<div class="scroll"><div class="timeline" style="--chart-width:${width}px"><div class="axis-label">${laneTitle}</div><div class="axis" style="width:${width}px">${axisHtml(width)}</div></div></div>`;
+  const timeline=chart.querySelector('.timeline');
+  lanes.forEach(([laneName,laneTasks])=>{
+    const sorted=[...laneTasks].sort((a,b)=>a.start_minute-b.start_minute || a.end_minute-b.end_minute || a.index-b.index);
+    const levels=[];
+    const positioned=[];
+    sorted.forEach(task=>{
+      let level=levels.findIndex(until=>until<=task.start_minute);
+      if(level<0){level=levels.length;levels.push(-Infinity);}
+      levels[level]=task.end_minute;
+      positioned.push([task,level]);
+    });
+    const laneHeight=Math.max(42,8+Math.max(levels.length,1)*32);
+    const label=document.createElement('div');
+    label.className='lane-label';
+    label.style.height=`${laneHeight}px`;
+    label.innerHTML=`<b>${escapeHtml(laneName)}</b><span>${escapeHtml(laneStats(laneTasks))}</span>`;
+    const lane=document.createElement('div');
+    lane.className='lane';
+    lane.style.width=`${width}px`;
+    lane.style.height=`${laneHeight}px`;
+    positioned.forEach(([task,level])=>{
+      const left=Math.max(Number(task.start_minute)*scale,0);
+      const taskWidth=Math.max((Number(task.end_minute)-Number(task.start_minute))*scale,5);
+      lane.appendChild(renderTask(task,left,taskWidth,7+level*32));
+    });
+    timeline.append(label,lane);
+  });
+}
+function renderCards(){
+  const tasks=dayTasks();
+  const cards=[
+    ['Solution',CASE.status,CASE.status==='feasible' || CASE.status==='optimal'],
+    ['Verify',CASE.verify_status,CASE.verify_status==='ok'],
+    ['机器并发错误',CASE.machine_error_count,CASE.machine_error_count===0],
+    ['总任务数',CASE.tasks.length,false],
+    ['当天任务',tasks.length,false],
+    ['排程天数',CASE.days.length,false],
+    ['订单期限',CASE.max_due_day ? `Day ${CASE.max_due_day}` : '无期限',false],
+    ['Solver',CASE.solver_method || 'unknown',false],
+    ['耗时',Number.isFinite(Number(CASE.solve_seconds)) ? `${Number(CASE.solve_seconds).toFixed(3)} s` : '未提供',false]
+  ];
+  document.getElementById('cards').innerHTML=cards.map(([label,value,ok])=>`<div class="card ${ok?'ok':''}"><span>${escapeHtml(label)}</span><b>${escapeHtml(value)}</b></div>`).join('');
+}
+function renderInventory(){
+  const day=String(daySelect.value || CASE.days[0] || 1);
+  const rows=CASE.inventory_by_day[day] || [];
+  const target=document.getElementById('inventory');
+  if(rows.length===0){target.innerHTML='<div class="empty">无订单需求</div>';return;}
+  target.innerHTML=`<div class="table-wrap"><table><thead><tr><th>产品</th><th>初始库存</th><th>订单总需求</th><th>净需求</th><th>Day开始可用</th><th>Day开始剩余</th><th>当天完成</th><th>Day结束可用</th><th>Day结束剩余</th><th>交期</th></tr></thead><tbody>${rows.map(row=>`<tr><td>${escapeHtml(row.product_id)}</td><td>${row.initial_inventory}</td><td>${row.required}</td><td>${row.net_required}</td><td>${row.start_available}</td><td>${row.start_remaining}</td><td>${row.produced_today}</td><td>${row.end_available}</td><td>${row.end_remaining}</td><td>${escapeHtml((row.due || []).map(item=>`Day ${item.day} x${item.quantity}`).join('；'))}</td></tr>`).join('')}</tbody></table></div>`;
+}
+function renderTaskTable(){
+  const tasks=dayTasks();
+  const target=document.getElementById('taskTable');
+  if(tasks.length===0){target.innerHTML='<div class="empty">无任务明细</div>';return;}
+  target.innerHTML=`<div class="table-wrap"><table><thead><tr><th>#</th><th>Day</th><th>时间</th><th>产品</th><th>Step</th><th>工序</th><th>数量</th><th>工人</th><th>机器</th><th>时长</th></tr></thead><tbody>${tasks.map(task=>`<tr><td>${task.index}</td><td>Day ${task.day}</td><td>${fmt(task.start_minute)}-${fmt(task.end_minute)}</td><td>${escapeHtml(task.product_id)}</td><td>${escapeHtml(task.step_index ?? '')}</td><td>${escapeHtml(task.process)}</td><td>${task.quantity}</td><td>${escapeHtml(task.worker)}</td><td>${escapeHtml((task.machine_copy_labels || []).join(', '))}</td><td>${fmt(task.duration_minutes)}</td></tr>`).join('')}</tbody></table></div>`;
+}
+function renderErrors(){
+  const target=document.getElementById('errors');
+  const errors=CASE.errors || [];
+  if(!errors.length){target.innerHTML='';return;}
+  target.innerHTML=`<section><h2>不可行/错误信息</h2><div class="panel">${errors.map(error=>`<p>${escapeHtml(error)}</p>`).join('')}</div></section>`;
+}
+function renderAll(){
+  body.dataset.color=colorSelect.value;
+  renderCards();
+  renderInventory();
+  renderTimeline();
+  renderTaskTable();
+  renderErrors();
+}
+CASE.days.forEach(day=>{
+  const option=document.createElement('option');
+  option.value=day;
+  option.textContent=`Day ${day}`;
+  daySelect.appendChild(option);
 });
+viewButtons.forEach(button=>{
+  button.addEventListener('click',()=>{
+    currentView=button.dataset.view;
+    viewButtons.forEach(item=>item.classList.toggle('active',item===button));
+    renderAll();
+  });
+});
+daySelect.addEventListener('change',renderAll);
+colorSelect.addEventListener('change',renderAll);
+renderAll();
 </script></body></html>

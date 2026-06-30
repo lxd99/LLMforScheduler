@@ -450,49 +450,182 @@ def _render_sources(order_path: Path, solution_path: Path, verify_path: Path | N
     )
 
 
-def render_solution_html(order_path: Path, solution_path: Path, output_path: Path, verify_path: Path | None = None) -> None:
+def _safe_script_json(value: Any) -> str:
+    return json.dumps(value, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
+
+
+def _product_requirements(order: Any, tasks: list[VisualTask]) -> dict[str, dict[str, Any]]:
+    required = required_quantity_by_product(order)
+    net_required = net_required_by_product(order)
+    due_rows = due_requirements_by_product(order)
+    products = set(required) | set(order.initial_inventory) | {task.product_id for task in tasks if task.product_id}
+    return {
+        product: {
+            "required": int(required.get(product, 0)),
+            "net_required": int(net_required.get(product, 0)),
+            "initial_inventory": int(order.initial_inventory.get(product, 0)),
+            "due": [{"day": int(day), "quantity": int(qty)} for day, qty in due_rows.get(product, [])],
+        }
+        for product in sorted(products)
+    }
+
+
+def _inventory_by_day(order: Any, tasks: list[VisualTask], days: list[int]) -> dict[str, list[dict[str, Any]]]:
+    requirements = _product_requirements(order, tasks)
+    last_step_by_product = {
+        product: max((step.step_index for step in steps), default=None)
+        for product, steps in order.processes.items()
+    }
+    final_output: dict[tuple[str, int], int] = defaultdict(int)
+    for task in tasks:
+        if task.step_index is None:
+            continue
+        if task.step_index == last_step_by_product.get(task.product_id):
+            final_output[(task.product_id, task.day)] += task.quantity
+
+    result: dict[str, list[dict[str, Any]]] = {}
+    for day in days:
+        rows: list[dict[str, Any]] = []
+        for product, info in requirements.items():
+            produced_before = sum(qty for (pid, output_day), qty in final_output.items() if pid == product and output_day < day)
+            produced_today = int(final_output.get((product, day), 0))
+            start_available = int(info["initial_inventory"]) + produced_before
+            end_available = start_available + produced_today
+            required = int(info["required"])
+            rows.append(
+                {
+                    "product_id": product,
+                    "initial_inventory": int(info["initial_inventory"]),
+                    "required": required,
+                    "net_required": int(info["net_required"]),
+                    "start_available": start_available,
+                    "start_remaining": max(required - start_available, 0),
+                    "produced_today": produced_today,
+                    "end_available": end_available,
+                    "end_remaining": max(required - end_available, 0),
+                    "due": info["due"],
+                }
+            )
+        result[str(day)] = rows
+    return result
+
+
+def _task_payload(task: VisualTask) -> dict[str, Any]:
+    return {
+        "index": task.index,
+        "day": task.day,
+        "start_minute": task.start_minute,
+        "end_minute": task.end_minute,
+        "product_id": task.product_id,
+        "step_index": task.step_index,
+        "process": task.process,
+        "quantity": task.quantity,
+        "worker": task.worker,
+        "machines": list(task.machines),
+        "machine_copy_labels": list(task.machine_copy_labels or (NO_MACHINE_LABEL,)),
+        "duration_minutes": task.duration_minutes,
+    }
+
+
+def _build_case_payload(order_path: Path, solution_path: Path, verify_path: Path | None = None) -> dict[str, Any]:
     order = load_order(order_path)
     solution = _read_json(solution_path)
     verify = _read_json(verify_path) if verify_path and verify_path.exists() else None
     tasks = _assign_machine_copies(_flatten_tasks(solution), order.machines)
-    process_colors, machine_colors = _color_maps(tasks)
-    if tasks:
-        min_day = min(task.day for task in tasks)
-        max_day = max(task.day for task in tasks)
-    else:
-        min_day = 1
-        max_day = max((item.due_day for item in order.orders), default=1)
-    total_minutes = max((max_day - min_day + 1) * WORKER_DAY_MINUTES, WORKER_DAY_MINUTES)
-    width = min(max(total_minutes * 2.5, 1200.0), 7200.0)
-    scale = width / total_minutes
     case_id = solution.get("case_id") or order.case_id or solution_path.stem.replace(".solution", "")
-
-    worker_lanes = _build_worker_lanes(sorted(order.workers), tasks)
-    machine_lanes = _build_machine_lanes(order.machines, tasks)
-    generated_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    task_days = sorted({task.day for task in tasks})
+    days = task_days or [1]
     verify_status = (verify or {}).get("checker_status") or (verify or {}).get("status") or "未提供"
     machine_errors = (verify or {}).get("machine_error_count", "未提供")
-    day_text = f"Day {min_day}-{max_day}" if tasks else "无任务"
+    requirements = _product_requirements(order, tasks)
+    max_due = max((item.due_day for item in order.orders), default=0)
+    errors = solution.get("errors") or (solution.get("summary") or {}).get("errors") or []
+    if not isinstance(errors, list):
+        errors = [errors]
+
+    return {
+        "case_id": case_id,
+        "status": solution.get("status", "unknown"),
+        "verify_status": verify_status,
+        "machine_error_count": machine_errors,
+        "solver_method": solution.get("solver_method", "unknown"),
+        "strategy": solution.get("strategy"),
+        "solve_seconds": solution.get("solve_seconds"),
+        "summary": solution.get("summary") or {},
+        "errors": [str(item) for item in errors],
+        "days": days,
+        "max_due_day": max_due,
+        "workers": sorted(order.workers),
+        "machines": order.machines,
+        "requirements": requirements,
+        "inventory_by_day": _inventory_by_day(order, tasks, days),
+        "tasks": [_task_payload(task) for task in tasks],
+        "routes": {
+            product: [
+                {
+                    "step_index": step.step_index,
+                    "process": step.name,
+                    "duration_minutes": step.duration_minutes,
+                    "machines": list(step.equipment),
+                    "workers": list(step.eligible_workers),
+                }
+                for step in steps
+            ]
+            for product, steps in sorted(order.processes.items())
+        },
+        "source": {
+            "order": str(order_path),
+            "solution": str(solution_path),
+            "verify": str(verify_path) if verify_path else None,
+        },
+    }
+
+
+def _index_case_metadata(case_payload: dict[str, Any], output_path: Path) -> dict[str, Any]:
+    task_count = len(case_payload["tasks"])
+    return {
+        "case_id": case_payload["case_id"],
+        "status": case_payload["status"],
+        "verify_status": case_payload["verify_status"],
+        "task_count": task_count,
+        "day_count": len(case_payload["days"]),
+        "max_due_day": case_payload["max_due_day"],
+        "html": output_path.name,
+    }
+
+
+def render_solution_html(order_path: Path, solution_path: Path, output_path: Path, verify_path: Path | None = None) -> dict[str, Any]:
+    case_payload = _build_case_payload(order_path, solution_path, verify_path)
+    case_id = case_payload["case_id"]
+    generated_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    day_text = f"Day {min(case_payload['days'])}-{max(case_payload['days'])}" if case_payload["tasks"] else "无任务"
 
     css = """
-:root{--bg:#f7f7f4;--paper:#fff;--ink:#222821;--muted:#667064;--line:#d9ded2;--strong:#b7c0b0;--ok:#25784a;--bad:#a23b3b}
+:root{--bg:#f7f7f4;--paper:#fff;--ink:#222821;--muted:#667064;--line:#d9ded2;--strong:#b7c0b0;--ok:#25784a;--bad:#a23b3b;--focus:#315f83}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
-header{padding:22px 28px 16px;background:#fbfbf8;border-bottom:1px solid var(--line)}
+header{padding:18px 24px 14px;background:#fbfbf8;border-bottom:1px solid var(--line)}
 h1{margin:0 0 8px;font-size:24px;letter-spacing:0}
 h2{font-size:18px;margin:0 0 10px}
 h3{font-size:15px;margin:14px 0 6px}
 .meta{display:flex;gap:8px 16px;flex-wrap:wrap;color:var(--muted);font-size:13px}
-main{padding:20px 28px 34px}
-.cards{display:grid;grid-template-columns:repeat(5,minmax(150px,1fr));gap:10px;margin-bottom:18px}
+main{padding:16px 24px 28px}
+.controls{display:flex;gap:10px;align-items:end;flex-wrap:wrap;margin-bottom:14px}
+.control{display:grid;gap:5px;color:var(--muted);font-size:12px}
+.control select{min-width:120px}
+.segmented{display:inline-flex;border:1px solid var(--strong);border-radius:8px;overflow:hidden;background:white}
+.segmented button{height:32px;border:0;border-right:1px solid var(--strong);background:white;padding:0 14px;color:#354035;cursor:pointer}
+.segmented button:last-child{border-right:0}
+.segmented button.active{background:#315f83;color:white}
+.cards{display:grid;grid-template-columns:repeat(6,minmax(130px,1fr));gap:10px;margin-bottom:14px}
 .card{background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:12px;min-height:70px}
 .card span{display:block;color:var(--muted);font-size:12px;margin-bottom:7px}
-.card b{display:block;font-size:18px;overflow-wrap:anywhere}
+.card b{display:block;font-size:17px;overflow-wrap:anywhere}
 .ok b{color:var(--ok)}
 section{margin:0 0 24px}
 .panel{background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:14px;overflow:hidden}
 .scroll{overflow:auto;border:1px solid var(--line);border-radius:8px;background:#fff}
-.timeline{display:grid;grid-template-columns:180px var(--chart-width);min-width:calc(180px + var(--chart-width))}
+.timeline{display:grid;grid-template-columns:190px var(--chart-width);min-width:calc(190px + var(--chart-width))}
 .axis-label,.lane-label{position:sticky;left:0;z-index:5;background:#f1f3ed;border-right:1px solid var(--strong)}
 .axis-label{height:48px;padding:14px 12px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--line)}
 .axis{position:relative;height:48px;background:#fbfbf8;border-bottom:1px solid var(--line)}
@@ -511,26 +644,64 @@ body[data-color="machine"] .task{border-color:color-mix(in srgb,var(--mach),#222
 .toolbar{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:10px}
 .toolbar label{color:var(--muted)}
 select{height:30px;border:1px solid var(--strong);border-radius:6px;background:white;padding:0 8px}
+.empty{padding:18px;color:var(--muted);background:white;border:1px solid var(--line);border-radius:8px}
 .route{margin:0 0 6px 18px;padding:0}
 .route li{margin:4px 0}
 .table-wrap{overflow:auto;border:1px solid var(--line);border-radius:8px}
 table{border-collapse:separate;border-spacing:0;width:100%;min-width:980px;background:white}
 th,td{padding:7px 9px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
 th{position:sticky;top:0;background:#eef1e9;color:#475044;font-size:12px}
+.inventory table{min-width:1120px}
 .source{display:grid;grid-template-columns:90px 1fr;gap:6px 10px;color:var(--muted);font-size:12px;overflow-wrap:anywhere}
 .task-tooltip{position:fixed;z-index:9999;display:none;max-width:360px;padding:10px 12px;border:1px solid #9ea995;border-radius:8px;background:rgba(255,255,252,.98);box-shadow:0 12px 30px rgba(32,40,28,.18);color:#222821;font-size:13px;line-height:1.45;white-space:pre-line;pointer-events:none}
 .task-tooltip b{display:block;margin-bottom:5px;font-size:14px}
 @media(max-width:1100px){main,header{padding-left:16px;padding-right:16px}.cards{grid-template-columns:repeat(2,minmax(130px,1fr))}}
 """
-    script = """
+    script = f"""
+const CASE={_safe_script_json(case_payload)};
+const WORKER_DAY_MINUTES={WORKER_DAY_MINUTES};
+const NO_MACHINE_LABEL={_safe_script_json(NO_MACHINE_LABEL)};
+const PALETTE={_safe_script_json(PALETTE)};
+let currentView='worker';
 const body=document.body;
-document.querySelectorAll('.mode').forEach(select=>{
-  select.addEventListener('change',()=>{body.dataset.color=select.value;document.querySelectorAll('.mode').forEach(other=>{other.value=select.value;});});
-});
+const daySelect=document.getElementById('daySelect');
+const colorSelect=document.getElementById('colorSelect');
+const viewButtons=[...document.querySelectorAll('[data-view]')];
 const taskTooltip=document.createElement('div');
 taskTooltip.className='task-tooltip';
 document.body.appendChild(taskTooltip);
-function placeTaskTooltip(event){
+function escapeHtml(value){{
+  return String(value ?? '').replace(/[&<>"']/g, ch=>({{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}}[ch]));
+}}
+function fmt(value,digits=2){{
+  const number=Number(value);
+  if(!Number.isFinite(number)) return String(value ?? '');
+  if(Math.abs(number-Math.round(number))<1e-9) return String(Math.round(number));
+  return number.toFixed(digits).replace(/\\.0+$/,'').replace(/(\\.\\d*?)0+$/,'$1');
+}}
+function colorMap(values){{
+  const names=[...new Set(values.filter(Boolean))].sort();
+  const map={{}};
+  names.forEach((name,index)=>{{map[name]=PALETTE[index%PALETTE.length];}});
+  return map;
+}}
+const processColors=colorMap(CASE.tasks.map(task=>task.process || '未知工序'));
+const machineColors=colorMap(CASE.tasks.flatMap(task=>(task.machine_copy_labels || [NO_MACHINE_LABEL]).map(label=>label.split(' #')[0])));
+function taskTooltipText(task){{
+  const step=task.step_index ?? '?';
+  const machines=(task.machine_copy_labels && task.machine_copy_labels.length ? task.machine_copy_labels : [NO_MACHINE_LABEL]).join(', ');
+  return [
+    `任务 #${{task.index}}`,
+    `产品：${{task.product_id}}`,
+    `工序：${{step}}. ${{task.process}}`,
+    `数量：${{task.quantity}}`,
+    `工人：${{task.worker || '未知'}}`,
+    `机器：${{machines}}`,
+    `时间：Day ${{task.day}} ${{fmt(task.start_minute)}}-${{fmt(task.end_minute)}} min`,
+    `总时长：${{fmt(task.duration_minutes)}} min`
+  ].join('\\n');
+}}
+function placeTaskTooltip(event){{
   const pad=14;
   taskTooltip.style.display='block';
   const rect=taskTooltip.getBoundingClientRect();
@@ -540,20 +711,190 @@ function placeTaskTooltip(event){
   if(top+rect.height>window.innerHeight-8) top=event.clientY-rect.height-pad;
   taskTooltip.style.left=Math.max(8,left)+'px';
   taskTooltip.style.top=Math.max(8,top)+'px';
-}
-document.querySelectorAll('.task').forEach(task=>{
-  task.addEventListener('mouseenter',event=>{
+}}
+function attachTooltip(element,task){{
+  element.addEventListener('mouseenter',event=>{{
     const title=document.createElement('b');
     title.textContent='任务详情';
-    const body=document.createElement('div');
-    body.textContent=task.dataset.tooltip||'';
+    const content=document.createElement('div');
+    content.textContent=taskTooltipText(task);
     taskTooltip.textContent='';
-    taskTooltip.append(title,body);
+    taskTooltip.append(title,content);
     placeTaskTooltip(event);
-  });
-  task.addEventListener('mousemove',placeTaskTooltip);
-  task.addEventListener('mouseleave',()=>{taskTooltip.style.display='none';});
-});
+  }});
+  element.addEventListener('mousemove',placeTaskTooltip);
+  element.addEventListener('mouseleave',()=>{{taskTooltip.style.display='none';}});
+}}
+function laneStats(tasks){{
+  const duration=tasks.reduce((total,task)=>total+Math.max(Number(task.end_minute)-Number(task.start_minute),0),0);
+  return `${{tasks.length}} 项 / ${{fmt(duration)}} min`;
+}}
+function dayTasks(){{
+  const day=Number(daySelect.value || CASE.days[0] || 1);
+  return CASE.tasks.filter(task=>Number(task.day)===day).sort((a,b)=>a.start_minute-b.start_minute || a.end_minute-b.end_minute || a.index-b.index);
+}}
+function buildWorkerLanes(tasks){{
+  const grouped=new Map();
+  tasks.forEach(task=>{{
+    const key=task.worker || '未知工人';
+    if(!grouped.has(key)) grouped.set(key,[]);
+    grouped.get(key).push(task);
+  }});
+  const names=[...new Set([...(CASE.workers || []),...grouped.keys()])].sort();
+  return names.map(name=>[name,grouped.get(name) || []]);
+}}
+function buildMachineLanes(tasks){{
+  const grouped=new Map();
+  tasks.forEach(task=>{{
+    const labels=task.machine_copy_labels && task.machine_copy_labels.length ? task.machine_copy_labels : [NO_MACHINE_LABEL];
+    labels.forEach(label=>{{
+      if(!grouped.has(label)) grouped.set(label,[]);
+      grouped.get(label).push(task);
+    }});
+  }});
+  const names=[];
+  if(grouped.has(NO_MACHINE_LABEL)) names.push(NO_MACHINE_LABEL);
+  Object.keys(CASE.machines || {{}}).sort().forEach(machine=>{{
+    const count=Math.max(Number(CASE.machines[machine]) || 1,1);
+    for(let index=1;index<=count;index++) names.push(`${{machine}} #${{index}}`);
+  }});
+  [...grouped.keys()].sort().forEach(name=>{{if(!names.includes(name)) names.push(name);}});
+  return names.map(name=>[name,grouped.get(name) || []]);
+}}
+function buildTaskLanes(tasks){{
+  const grouped=new Map();
+  tasks.forEach(task=>{{
+    const key=task.product_id || '未知产品';
+    if(!grouped.has(key)) grouped.set(key,[]);
+    grouped.get(key).push(task);
+  }});
+  const names=[...new Set([...Object.keys(CASE.requirements || {{}}),...grouped.keys()])].sort();
+  return names.map(name=>[name,grouped.get(name) || []]);
+}}
+function axisHtml(width){{
+  const scale=width/WORKER_DAY_MINUTES;
+  let html='';
+  for(let minute=0;minute<=WORKER_DAY_MINUTES;minute+=60){{
+    html+=`<div class="tick ${{minute===0?'dayline':''}}" style="left:${{(minute*scale).toFixed(2)}}px"><span>${{minute}}</span></div>`;
+  }}
+  return html;
+}}
+function renderTask(task,left,width,top){{
+  const step=task.step_index ?? '?';
+  const machines=(task.machine_copy_labels && task.machine_copy_labels.length ? task.machine_copy_labels : [NO_MACHINE_LABEL]).join(', ');
+  const machineKey=(task.machine_copy_labels && task.machine_copy_labels[0] ? task.machine_copy_labels[0].split(' #')[0] : NO_MACHINE_LABEL);
+  const el=document.createElement('div');
+  el.className='task';
+  el.style.left=`${{left.toFixed(2)}}px`;
+  el.style.width=`${{width.toFixed(2)}}px`;
+  el.style.top=`${{top.toFixed(2)}}px`;
+  el.style.setProperty('--proc',processColors[task.process || '未知工序'] || PALETTE[0]);
+  el.style.setProperty('--mach',machineColors[machineKey] || PALETTE[1]);
+  el.innerHTML=`<span>${{escapeHtml(`${{step}}. ${{task.process}} x${{task.quantity}}`)}}</span><small>${{escapeHtml(`${{task.product_id}} · ${{machines}}`)}}</small>`;
+  attachTooltip(el,task);
+  return el;
+}}
+function renderTimeline(){{
+  const tasks=dayTasks();
+  let lanes;
+  let laneTitle;
+  if(currentView==='machine'){{lanes=buildMachineLanes(tasks);laneTitle='机器';}}
+  else if(currentView==='task'){{lanes=buildTaskLanes(tasks);laneTitle='产品';}}
+  else{{lanes=buildWorkerLanes(tasks);laneTitle='工人';}}
+  const chart=document.getElementById('chart');
+  const width=1440;
+  const scale=width/WORKER_DAY_MINUTES;
+  if(tasks.length===0){{
+    chart.innerHTML='<div class="empty">无排班任务</div>';
+    return;
+  }}
+  chart.innerHTML=`<div class="scroll"><div class="timeline" style="--chart-width:${{width}}px"><div class="axis-label">${{laneTitle}}</div><div class="axis" style="width:${{width}}px">${{axisHtml(width)}}</div></div></div>`;
+  const timeline=chart.querySelector('.timeline');
+  lanes.forEach(([laneName,laneTasks])=>{{
+    const sorted=[...laneTasks].sort((a,b)=>a.start_minute-b.start_minute || a.end_minute-b.end_minute || a.index-b.index);
+    const levels=[];
+    const positioned=[];
+    sorted.forEach(task=>{{
+      let level=levels.findIndex(until=>until<=task.start_minute);
+      if(level<0){{level=levels.length;levels.push(-Infinity);}}
+      levels[level]=task.end_minute;
+      positioned.push([task,level]);
+    }});
+    const laneHeight=Math.max(42,8+Math.max(levels.length,1)*32);
+    const label=document.createElement('div');
+    label.className='lane-label';
+    label.style.height=`${{laneHeight}}px`;
+    label.innerHTML=`<b>${{escapeHtml(laneName)}}</b><span>${{escapeHtml(laneStats(laneTasks))}}</span>`;
+    const lane=document.createElement('div');
+    lane.className='lane';
+    lane.style.width=`${{width}}px`;
+    lane.style.height=`${{laneHeight}}px`;
+    positioned.forEach(([task,level])=>{{
+      const left=Math.max(Number(task.start_minute)*scale,0);
+      const taskWidth=Math.max((Number(task.end_minute)-Number(task.start_minute))*scale,5);
+      lane.appendChild(renderTask(task,left,taskWidth,7+level*32));
+    }});
+    timeline.append(label,lane);
+  }});
+}}
+function renderCards(){{
+  const tasks=dayTasks();
+  const cards=[
+    ['Solution',CASE.status,CASE.status==='feasible' || CASE.status==='optimal'],
+    ['Verify',CASE.verify_status,CASE.verify_status==='ok'],
+    ['机器并发错误',CASE.machine_error_count,CASE.machine_error_count===0],
+    ['总任务数',CASE.tasks.length,false],
+    ['当天任务',tasks.length,false],
+    ['排程天数',CASE.days.length,false],
+    ['订单期限',CASE.max_due_day ? `Day ${{CASE.max_due_day}}` : '无期限',false],
+    ['Solver',CASE.solver_method || 'unknown',false],
+    ['耗时',Number.isFinite(Number(CASE.solve_seconds)) ? `${{Number(CASE.solve_seconds).toFixed(3)}} s` : '未提供',false]
+  ];
+  document.getElementById('cards').innerHTML=cards.map(([label,value,ok])=>`<div class="card ${{ok?'ok':''}}"><span>${{escapeHtml(label)}}</span><b>${{escapeHtml(value)}}</b></div>`).join('');
+}}
+function renderInventory(){{
+  const day=String(daySelect.value || CASE.days[0] || 1);
+  const rows=CASE.inventory_by_day[day] || [];
+  const target=document.getElementById('inventory');
+  if(rows.length===0){{target.innerHTML='<div class="empty">无订单需求</div>';return;}}
+  target.innerHTML=`<div class="table-wrap"><table><thead><tr><th>产品</th><th>初始库存</th><th>订单总需求</th><th>净需求</th><th>Day开始可用</th><th>Day开始剩余</th><th>当天完成</th><th>Day结束可用</th><th>Day结束剩余</th><th>交期</th></tr></thead><tbody>${{rows.map(row=>`<tr><td>${{escapeHtml(row.product_id)}}</td><td>${{row.initial_inventory}}</td><td>${{row.required}}</td><td>${{row.net_required}}</td><td>${{row.start_available}}</td><td>${{row.start_remaining}}</td><td>${{row.produced_today}}</td><td>${{row.end_available}}</td><td>${{row.end_remaining}}</td><td>${{escapeHtml((row.due || []).map(item=>`Day ${{item.day}} x${{item.quantity}}`).join('；'))}}</td></tr>`).join('')}}</tbody></table></div>`;
+}}
+function renderTaskTable(){{
+  const tasks=dayTasks();
+  const target=document.getElementById('taskTable');
+  if(tasks.length===0){{target.innerHTML='<div class="empty">无任务明细</div>';return;}}
+  target.innerHTML=`<div class="table-wrap"><table><thead><tr><th>#</th><th>Day</th><th>时间</th><th>产品</th><th>Step</th><th>工序</th><th>数量</th><th>工人</th><th>机器</th><th>时长</th></tr></thead><tbody>${{tasks.map(task=>`<tr><td>${{task.index}}</td><td>Day ${{task.day}}</td><td>${{fmt(task.start_minute)}}-${{fmt(task.end_minute)}}</td><td>${{escapeHtml(task.product_id)}}</td><td>${{escapeHtml(task.step_index ?? '')}}</td><td>${{escapeHtml(task.process)}}</td><td>${{task.quantity}}</td><td>${{escapeHtml(task.worker)}}</td><td>${{escapeHtml((task.machine_copy_labels || []).join(', '))}}</td><td>${{fmt(task.duration_minutes)}}</td></tr>`).join('')}}</tbody></table></div>`;
+}}
+function renderErrors(){{
+  const target=document.getElementById('errors');
+  const errors=CASE.errors || [];
+  if(!errors.length){{target.innerHTML='';return;}}
+  target.innerHTML=`<section><h2>不可行/错误信息</h2><div class="panel">${{errors.map(error=>`<p>${{escapeHtml(error)}}</p>`).join('')}}</div></section>`;
+}}
+function renderAll(){{
+  body.dataset.color=colorSelect.value;
+  renderCards();
+  renderInventory();
+  renderTimeline();
+  renderTaskTable();
+  renderErrors();
+}}
+CASE.days.forEach(day=>{{
+  const option=document.createElement('option');
+  option.value=day;
+  option.textContent=`Day ${{day}}`;
+  daySelect.appendChild(option);
+}});
+viewButtons.forEach(button=>{{
+  button.addEventListener('click',()=>{{
+    currentView=button.dataset.view;
+    viewButtons.forEach(item=>item.classList.toggle('active',item===button));
+    renderAll();
+  }});
+}});
+daySelect.addEventListener('change',renderAll);
+colorSelect.addEventListener('change',renderAll);
+renderAll();
 """
     html_text = (
         "<!doctype html>\n"
@@ -564,38 +905,116 @@ document.querySelectorAll('.task').forEach(task=>{
         f"<header><h1>{_html(case_id)} 排班可视化</h1>"
         '<div class="meta">'
         f"<span>生成时间：{_html(generated_at)}</span>"
-        f"<span>solution：{_html(solution.get('status', 'unknown'))}</span>"
-        f"<span>verify：{_html(verify_status)}</span>"
-        f"<span>机器并发错误：{_html(machine_errors)}</span>"
+        f"<span>solution：{_html(case_payload['status'])}</span>"
+        f"<span>verify：{_html(case_payload['verify_status'])}</span>"
+        f"<span>机器并发错误：{_html(case_payload['machine_error_count'])}</span>"
         f"<span>排程：{_html(day_text)}</span>"
         "</div></header><main>"
-        + _render_cards(order, solution, verify, tasks)
-        + _render_problem_summary(order)
-        + _render_timeline(
-            "按工人看排程",
-            "工人",
-            worker_lanes,
-            min_day=min_day,
-            max_day=max_day,
-            width=width,
-            scale=scale,
-            process_colors=process_colors,
-            machine_colors=machine_colors,
-        )
-        + _render_timeline(
-            "按机器看排程",
-            "机器",
-            machine_lanes,
-            min_day=min_day,
-            max_day=max_day,
-            width=width,
-            scale=scale,
-            process_colors=process_colors,
-            machine_colors=machine_colors,
-        )
-        + _render_task_table(tasks)
+        '<section class="controls">'
+        '<label class="control">Day<select id="daySelect"></select></label>'
+        '<label class="control">颜色<select id="colorSelect"><option value="process">按工序</option><option value="machine">按机器</option></select></label>'
+        '<div class="control"><span>View</span><div class="segmented">'
+        '<button type="button" class="active" data-view="worker">工人</button>'
+        '<button type="button" data-view="machine">机器</button>'
+        '<button type="button" data-view="task">任务</button>'
+        "</div></div></section>"
+        '<section id="cards" class="cards"></section>'
+        '<section class="inventory"><h2>当日产出和余量</h2><div id="inventory"></div></section>'
+        '<section><div class="toolbar"><h2>排班甘特图</h2></div><div id="chart"></div></section>'
+        '<section><h2>当天任务顺序</h2><div id="taskTable"></div></section>'
+        '<div id="errors"></div>'
         + _render_sources(order_path, solution_path, verify_path)
         + f"</main><script>{script}</script></body></html>\n"
+    )
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(html_text, encoding="utf-8")
+    return _index_case_metadata(case_payload, output_path)
+
+
+def render_batch_index_html(output_path: Path, cases: list[dict[str, Any]], results_dir: Path) -> None:
+    generated_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    css = """
+:root{--bg:#f7f7f4;--paper:#fff;--ink:#222821;--muted:#667064;--line:#d9ded2;--strong:#b7c0b0;--focus:#315f83;--ok:#25784a}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
+header{padding:18px 24px 14px;background:#fbfbf8;border-bottom:1px solid var(--line)}
+h1{margin:0 0 8px;font-size:24px}
+.meta{display:flex;gap:8px 16px;flex-wrap:wrap;color:var(--muted);font-size:13px}
+main{height:calc(100vh - 88px);display:grid;grid-template-rows:auto 1fr;gap:12px;padding:14px 18px 18px}
+.controls{display:flex;gap:10px;align-items:end;flex-wrap:wrap;background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:12px}
+label{display:grid;gap:5px;color:var(--muted);font-size:12px}
+input,select{height:32px;border:1px solid var(--strong);border-radius:6px;background:white;padding:0 9px;color:var(--ink)}
+#caseSearch{width:260px}
+#caseSelect{width:min(560px,70vw)}
+.stat{min-width:96px;color:var(--muted);font-size:12px}
+.stat b{display:block;color:var(--ink);font-size:16px}
+iframe{width:100%;height:100%;border:1px solid var(--line);border-radius:8px;background:white}
+@media(max-width:900px){main{height:auto;min-height:calc(100vh - 88px)}#caseSearch,#caseSelect{width:100%}.controls{display:grid;grid-template-columns:1fr}.stat{display:inline-block;margin-right:14px}iframe{height:78vh}}
+"""
+    script = f"""
+const CASES={_safe_script_json(cases)};
+const caseSearch=document.getElementById('caseSearch');
+const statusFilter=document.getElementById('statusFilter');
+const caseSelect=document.getElementById('caseSelect');
+const frame=document.getElementById('caseFrame');
+function escapeHtml(value){{
+  return String(value ?? '').replace(/[&<>"']/g, ch=>({{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}}[ch]));
+}}
+function filteredCases(){{
+  const query=caseSearch.value.trim().toLowerCase();
+  const status=statusFilter.value;
+  return CASES.filter(item=>(!status || item.status===status) && (!query || item.case_id.toLowerCase().includes(query)));
+}}
+function renderOptions(preferred){{
+  const rows=filteredCases();
+  caseSelect.innerHTML=rows.map(item=>`<option value="${{escapeHtml(item.case_id)}}">${{escapeHtml(item.case_id)}} · ${{escapeHtml(item.status)}} · ${{item.task_count}} tasks · ${{item.day_count}} days</option>`).join('');
+  const target=preferred && rows.some(item=>item.case_id===preferred) ? preferred : (rows.find(item=>item.task_count>0 && (item.status==='feasible' || item.status==='optimal')) || rows[0] || {{}}).case_id;
+  if(target) caseSelect.value=target;
+  document.getElementById('shownCount').textContent=rows.length;
+  loadSelected();
+}}
+function loadSelected(){{
+  const selected=CASES.find(item=>item.case_id===caseSelect.value);
+  if(!selected){{frame.removeAttribute('src');return;}}
+  document.getElementById('selectedStatus').textContent=selected.status;
+  document.getElementById('selectedVerify').textContent=selected.verify_status;
+  document.getElementById('selectedTasks').textContent=selected.task_count;
+  frame.src=selected.html;
+}}
+caseSearch.addEventListener('input',()=>renderOptions(caseSelect.value));
+statusFilter.addEventListener('change',()=>renderOptions(caseSelect.value));
+caseSelect.addEventListener('change',loadSelected);
+renderOptions();
+"""
+    statuses = sorted({str(case["status"]) for case in cases})
+    status_options = '<option value="">全部</option>' + "".join(
+        f'<option value="{_html(status)}">{_html(status)}</option>' for status in statuses
+    )
+    feasible_count = sum(1 for case in cases if case["status"] in {"feasible", "optimal"})
+    verify_ok_count = sum(1 for case in cases if case["verify_status"] == "ok")
+    html_text = (
+        "<!doctype html>\n"
+        '<html lang="zh-CN"><head><meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width,initial-scale=1">'
+        f"<title>排班结果浏览</title><style>{css}</style></head>"
+        "<body><header><h1>排班结果浏览</h1><div class=\"meta\">"
+        f"<span>生成时间：{_html(generated_at)}</span>"
+        f"<span>结果目录：{_html(results_dir)}</span>"
+        f"<span>订单数：{len(cases)}</span>"
+        f"<span>可行/最优：{feasible_count}</span>"
+        f"<span>verify ok：{verify_ok_count}</span>"
+        "</div></header><main>"
+        '<section class="controls">'
+        '<label>搜索订单<input id="caseSearch" type="search" autocomplete="off"></label>'
+        f'<label>状态<select id="statusFilter">{status_options}</select></label>'
+        '<label>订单<select id="caseSelect"></select></label>'
+        '<div class="stat"><span>显示</span><b id="shownCount">0</b></div>'
+        '<div class="stat"><span>状态</span><b id="selectedStatus">-</b></div>'
+        '<div class="stat"><span>Verify</span><b id="selectedVerify">-</b></div>'
+        '<div class="stat"><span>任务</span><b id="selectedTasks">-</b></div>'
+        "</section>"
+        '<iframe id="caseFrame" title="排班可视化"></iframe>'
+        f"</main><script>{script}</script></body></html>\n"
     )
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(html_text, encoding="utf-8")
@@ -683,15 +1102,24 @@ def main() -> None:
         if not solution_paths:
             raise FileNotFoundError(f"no *.solution.json files under {results_dir}")
         written = []
+        index_cases = []
         for solution_path in solution_paths:
             solution = _read_json(solution_path)
             order_path = _resolve_order_path(solution, solution_path, args.sample_dir)
             verify_path = _infer_verify_path(solution_path, results_dir, None)
             case_id = solution.get("case_id") or _case_id_from_solution_path(solution_path)
             output_path = output_dir / f"{case_id}.html"
-            render_solution_html(order_path, solution_path, output_path, verify_path)
+            index_cases.append(render_solution_html(order_path, solution_path, output_path, verify_path))
             written.append(output_path)
-        print(json.dumps({"count": len(written), "output_dir": str(output_dir)}, ensure_ascii=False, indent=2))
+        index_path = output_dir / "index.html"
+        render_batch_index_html(index_path, index_cases, results_dir)
+        print(
+            json.dumps(
+                {"count": len(written), "output_dir": str(output_dir), "index": str(index_path)},
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
         return
 
     if args.order_json is None or args.solution_json is None:

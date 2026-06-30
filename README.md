@@ -10,7 +10,7 @@
 - `raw_orders/`：原始订单输入 JSON，当前全量数据共 670 条。
 - `solver/`：排班求解器和后处理代码，核心入口是 `schedule_solver.py`，可视化入口是 `visualize_solution.py`。
 - `results/raw_view/`：批量求解原始结果目录，包含每条 case 的 solution、verify 和 summary。
-- `results/html_view/`：由 solution 后处理生成的 HTML 甘特图目录。
+- `results/html_view/`：由 solution 后处理生成的 HTML 甘特图目录，批量结果目录下的 `index.html` 是人工校验入口页。
 - `checker/`：排班验证程序，核心入口是 `check_schedule.py`。
 - `analysis/case_study/`：抽样 case 的排班可视化 HTML，用于人工检查方案。
 - `analysis/data_analysis/`：订单、工艺和资源数据分析脚本或中间结果。
@@ -136,7 +136,9 @@ Verifier 的验证思路：
 - 容量下界证明不可行：94 条，状态为 `infeasible_proven`，因此没有生成可验证的排班方案，verify 记为 `not_applicable`。
 - 未求解完成或无结论：0 条，`not_solved_cases` 为空。
 - 当前结果中的 `solver_method` 均为 `timed_greedy`；CP-SAT fallback 保留在代码中，但本轮全量结果没有依赖它产出解。
-- 当前全量结果已转换为 670 个 HTML 文件，保存在 `results/html_view/all_machine_capacity_dynamic_chunk25_20260626_tl120/`；可行 case 展示具体排班，不可行 case 展示状态和输入摘要。
+- 当前全量结果已转换为 670 个订单 HTML 文件，保存在 `results/html_view/all_machine_capacity_dynamic_chunk25_20260626_tl120/`；入口页是 `results/html_view/all_machine_capacity_dynamic_chunk25_20260626_tl120/index.html`。
+- 入口页可以按订单搜索/筛选并打开对应排班页。单订单页支持按 Day 切换，并提供工人、机器、任务 3 种视图；任务 view 按产品查看当天工序顺序，底部表格按开始时间列出当天任务。
+- 单订单页还展示当天产出和余量：每个产品的初始库存、订单总需求、净需求、Day 开始可用量、当天完成量、Day 结束可用量和 Day 结束剩余量。可行 case 展示具体排班，不可行 case 展示状态、输入摘要和不可行原因。
 
 ## case_study
 

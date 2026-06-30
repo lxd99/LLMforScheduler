@@ -690,8 +690,9 @@ const machineColors=colorMap(CASE.tasks.flatMap(task=>(task.machine_copy_labels 
 function taskTooltipText(task){{
   const step=task.step_index ?? '?';
   const machines=(task.machine_copy_labels && task.machine_copy_labels.length ? task.machine_copy_labels : [NO_MACHINE_LABEL]).join(', ');
-  return [
+  const rows=[
     `任务 #${{task.index}}`,
+    task.flow_lane ? `生产流：${{task.flow_lane}}` : null,
     `产品：${{task.product_id}}`,
     `工序：${{step}}. ${{task.process}}`,
     `数量：${{task.quantity}}`,
@@ -699,7 +700,8 @@ function taskTooltipText(task){{
     `机器：${{machines}}`,
     `时间：Day ${{task.day}} ${{fmt(task.start_minute)}}-${{fmt(task.end_minute)}} min`,
     `总时长：${{fmt(task.duration_minutes)}} min`
-  ].join('\\n');
+  ];
+  return rows.filter(Boolean).join('\\n');
 }}
 function placeTaskTooltip(event){{
   const pad=14;
@@ -761,14 +763,63 @@ function buildMachineLanes(tasks){{
   [...grouped.keys()].sort().forEach(name=>{{if(!names.includes(name)) names.push(name);}});
   return names.map(name=>[name,grouped.get(name) || []]);
 }}
+function absStart(task){{
+  return (Number(task.day)-1)*WORKER_DAY_MINUTES + Number(task.start_minute);
+}}
+function absEnd(task){{
+  return (Number(task.day)-1)*WORKER_DAY_MINUTES + Number(task.end_minute);
+}}
+function compareTasks(a,b){{
+  return absStart(a)-absStart(b)
+    || Number(a.step_index ?? 0)-Number(b.step_index ?? 0)
+    || absEnd(a)-absEnd(b)
+    || Number(a.index)-Number(b.index);
+}}
+function assignFlowLanes(){{
+  const grouped=new Map();
+  CASE.tasks.forEach(task=>{{
+    const product=task.product_id || '未知产品';
+    if(!grouped.has(product)) grouped.set(product,[]);
+    grouped.get(product).push(task);
+  }});
+  grouped.forEach((productTasks,product)=>{{
+    const flows=[];
+    [...productTasks].sort(compareTasks).forEach(task=>{{
+      const step=Number(task.step_index);
+      const start=absStart(task);
+      let selected=null;
+      if(Number.isFinite(step) && step>1){{
+        const candidates=flows
+          .filter(flow=>flow.lastStep===step-1 && flow.lastEnd<=start+1e-6)
+          .sort((a,b)=>b.lastEnd-a.lastEnd || a.id-b.id);
+        selected=candidates[0] || null;
+      }}
+      if(!selected){{
+        selected={{id:flows.length+1,lastStep:0,lastEnd:-Infinity,tasks:[]}};
+        flows.push(selected);
+      }}
+      selected.tasks.push(task);
+      if(Number.isFinite(step)) selected.lastStep=step;
+      selected.lastEnd=Math.max(selected.lastEnd,absEnd(task));
+      task.flow_index=selected.id;
+      task.flow_lane=`${{product}} #${{String(selected.id).padStart(2,'0')}}`;
+    }});
+  }});
+}}
 function buildTaskLanes(tasks){{
   const grouped=new Map();
   tasks.forEach(task=>{{
-    const key=task.product_id || '未知产品';
+    const key=task.flow_lane || task.product_id || '未知产品';
     if(!grouped.has(key)) grouped.set(key,[]);
     grouped.get(key).push(task);
   }});
-  const names=[...new Set([...Object.keys(CASE.requirements || {{}}),...grouped.keys()])].sort();
+  const names=[...grouped.keys()].sort((a,b)=>{{
+    const at=(grouped.get(a) || [{{}}])[0];
+    const bt=(grouped.get(b) || [{{}}])[0];
+    return String(at.product_id || '').localeCompare(String(bt.product_id || ''),'zh-CN')
+      || Number(at.flow_index || 0)-Number(bt.flow_index || 0)
+      || a.localeCompare(b,'zh-CN');
+  }});
   return names.map(name=>[name,grouped.get(name) || []]);
 }}
 function axisHtml(width){{
@@ -812,15 +863,20 @@ function renderTimeline(){{
   const timeline=chart.querySelector('.timeline');
   lanes.forEach(([laneName,laneTasks])=>{{
     const sorted=[...laneTasks].sort((a,b)=>a.start_minute-b.start_minute || a.end_minute-b.end_minute || a.index-b.index);
-    const levels=[];
-    const positioned=[];
-    sorted.forEach(task=>{{
-      let level=levels.findIndex(until=>until<=task.start_minute);
-      if(level<0){{level=levels.length;levels.push(-Infinity);}}
-      levels[level]=task.end_minute;
-      positioned.push([task,level]);
-    }});
-    const laneHeight=Math.max(42,8+Math.max(levels.length,1)*32);
+    let positioned=[];
+    let laneHeight=42;
+    if(currentView==='task'){{
+      positioned=sorted.map(task=>[task,0]);
+    }} else {{
+      const levels=[];
+      sorted.forEach(task=>{{
+        let level=levels.findIndex(until=>until<=task.start_minute);
+        if(level<0){{level=levels.length;levels.push(-Infinity);}}
+        levels[level]=task.end_minute;
+        positioned.push([task,level]);
+      }});
+      laneHeight=Math.max(42,8+Math.max(levels.length,1)*32);
+    }}
     const label=document.createElement('div');
     label.className='lane-label';
     label.style.height=`${{laneHeight}}px`;
@@ -863,7 +919,7 @@ function renderTaskTable(){{
   const tasks=dayTasks();
   const target=document.getElementById('taskTable');
   if(tasks.length===0){{target.innerHTML='<div class="empty">无任务明细</div>';return;}}
-  target.innerHTML=`<div class="table-wrap"><table><thead><tr><th>#</th><th>Day</th><th>时间</th><th>产品</th><th>Step</th><th>工序</th><th>数量</th><th>工人</th><th>机器</th><th>时长</th></tr></thead><tbody>${{tasks.map(task=>`<tr><td>${{task.index}}</td><td>Day ${{task.day}}</td><td>${{fmt(task.start_minute)}}-${{fmt(task.end_minute)}}</td><td>${{escapeHtml(task.product_id)}}</td><td>${{escapeHtml(task.step_index ?? '')}}</td><td>${{escapeHtml(task.process)}}</td><td>${{task.quantity}}</td><td>${{escapeHtml(task.worker)}}</td><td>${{escapeHtml((task.machine_copy_labels || []).join(', '))}}</td><td>${{fmt(task.duration_minutes)}}</td></tr>`).join('')}}</tbody></table></div>`;
+  target.innerHTML=`<div class="table-wrap"><table><thead><tr><th>#</th><th>生产流</th><th>Day</th><th>时间</th><th>产品</th><th>Step</th><th>工序</th><th>数量</th><th>工人</th><th>机器</th><th>时长</th></tr></thead><tbody>${{tasks.map(task=>`<tr><td>${{task.index}}</td><td>${{escapeHtml(task.flow_lane || '')}}</td><td>Day ${{task.day}}</td><td>${{fmt(task.start_minute)}}-${{fmt(task.end_minute)}}</td><td>${{escapeHtml(task.product_id)}}</td><td>${{escapeHtml(task.step_index ?? '')}}</td><td>${{escapeHtml(task.process)}}</td><td>${{task.quantity}}</td><td>${{escapeHtml(task.worker)}}</td><td>${{escapeHtml((task.machine_copy_labels || []).join(', '))}}</td><td>${{fmt(task.duration_minutes)}}</td></tr>`).join('')}}</tbody></table></div>`;
 }}
 function renderErrors(){{
   const target=document.getElementById('errors');
@@ -894,6 +950,7 @@ viewButtons.forEach(button=>{{
 }});
 daySelect.addEventListener('change',renderAll);
 colorSelect.addEventListener('change',renderAll);
+assignFlowLanes();
 renderAll();
 """
     html_text = (

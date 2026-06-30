@@ -137,7 +137,7 @@ Verifier 的验证思路：
 - 未求解完成或无结论：0 条，`not_solved_cases` 为空。
 - 当前结果中的 `solver_method` 均为 `timed_greedy`；CP-SAT fallback 保留在代码中，但本轮全量结果没有依赖它产出解。
 - 当前全量结果已转换为 670 个订单 HTML 文件，保存在 `results/html_view/all_machine_capacity_dynamic_chunk25_20260626_tl120/`；入口页是 `results/html_view/all_machine_capacity_dynamic_chunk25_20260626_tl120/index.html`。
-- 入口页可以按订单搜索/筛选并打开对应排班页。单订单页支持按 Day 切换，并提供工人、机器、任务 3 种视图；任务 view 按产品查看当天工序顺序，底部表格按开始时间列出当天任务。
+- 入口页可以按订单搜索/筛选并打开对应排班页。单订单页支持按 Day 切换，并提供工人、机器、任务 3 种视图；任务 view 按产品实例/生产流分行查看当天工序顺序，底部表格按开始时间列出当天任务。
 - 单订单页还展示当天产出和余量：每个产品的初始库存、订单总需求、净需求、Day 开始可用量、当天完成量、Day 结束可用量和 Day 结束剩余量。可行 case 展示具体排班，不可行 case 展示状态、输入摘要和不可行原因。
 
 ## case_study

@@ -942,20 +942,41 @@ function renderTimeline(view,targetId){{
     timeline.append(label,lane);
   }});
 }}
-function renderCards(){{
-  const tasks=dayTasks();
+function renderStaticCards(){{
   const cards=[
     ['Solution',CASE.status,CASE.status==='feasible' || CASE.status==='optimal'],
     ['Verify',CASE.verify_status,CASE.verify_status==='ok'],
     ['机器并发错误',CASE.machine_error_count,CASE.machine_error_count===0],
     ['总任务数',CASE.tasks.length,false],
-    ['当天任务',tasks.length,false],
     ['排程天数',CASE.days.length,false],
     ['订单期限',CASE.max_due_day ? `Day ${{CASE.max_due_day}}` : '无期限',false],
     ['Solver',CASE.solver_method || 'unknown',false],
     ['耗时',Number.isFinite(Number(CASE.solve_seconds)) ? `${{Number(CASE.solve_seconds).toFixed(3)}} s` : '未提供',false]
   ];
-  document.getElementById('cards').innerHTML=cards.map(([label,value,ok])=>`<div class="card ${{ok?'ok':''}}"><span>${{escapeHtml(label)}}</span><b>${{escapeHtml(value)}}</b></div>`).join('');
+  document.getElementById('staticCards').innerHTML=cards.map(([label,value,ok])=>`<div class="card ${{ok?'ok':''}}"><span>${{escapeHtml(label)}}</span><b>${{escapeHtml(value)}}</b></div>`).join('');
+}}
+function renderDayCards(){{
+  const day=String(daySelect.value || CASE.days[0] || 1);
+  const tasks=dayTasks();
+  const rows=CASE.inventory_by_day[day] || [];
+  const finalRows=rows.filter(row=>row.is_final);
+  const startRemaining=finalRows.reduce((total,row)=>total+Math.max(Number(row.required)-Number(row.start_inventory),0),0);
+  const endRemaining=finalRows.reduce((total,row)=>total+Number(row.end_remaining || 0),0);
+  const finalOutput=finalRows.reduce((total,row)=>total+Number(row.produced_today || 0),0);
+  const wipEnd=rows.filter(row=>!row.is_final).reduce((total,row)=>total+Number(row.end_inventory || 0),0);
+  const workers=new Set(tasks.map(task=>task.worker).filter(Boolean));
+  const machines=new Set(tasks.flatMap(task=>task.machine_copy_labels || []).filter(label=>label && label!==NO_MACHINE_LABEL));
+  const cards=[
+    ['当前 Day',`Day ${{day}}`,false],
+    ['当天任务',tasks.length,false],
+    ['Day开始成品剩余',startRemaining,false],
+    ['当天完成成品',finalOutput,false],
+    ['Day结束成品剩余',endRemaining,false],
+    ['Day结束在制品',wipEnd,false],
+    ['当天工人',workers.size,false],
+    ['当天机器',machines.size,false]
+  ];
+  document.getElementById('dayCards').innerHTML=cards.map(([label,value,ok])=>`<div class="card ${{ok?'ok':''}}"><span>${{escapeHtml(label)}}</span><b>${{escapeHtml(value)}}</b></div>`).join('');
 }}
 function dueText(items){{
   return (items || []).map(item=>`Day ${{item.day}} x${{item.quantity}}`).join('；');
@@ -1000,8 +1021,9 @@ function renderErrors(){{
 }}
 function renderAll(){{
   body.dataset.color=colorSelect.value;
-  renderCards();
+  renderStaticCards();
   renderProblemInfo();
+  renderDayCards();
   renderInventory();
   renderTimeline('worker','workerChart');
   renderTimeline('machine','machineChart');
@@ -1036,12 +1058,13 @@ renderAll();
         "</div>"
         '<div class="explain"><b>说明：</b>每个色块是一道排产任务，长度表示加工时间；页面会同时展示工人、机器、生产流三张甘特图，分别用于检查人员占用、设备占用和工序顺序；库存表显示每道工序产物在当天开始和结束时的余量。</div>'
         "</header><main>"
+        '<section id="staticCards" class="cards"></section>'
+        '<section><h2>任务和工艺信息</h2><div id="problemInfo"></div></section>'
         '<section class="controls">'
         '<label class="control">Day<select id="daySelect"></select></label>'
         '<label class="control">颜色<select id="colorSelect"><option value="process">按工序</option><option value="machine">按机器</option></select></label>'
         "</section>"
-        '<section id="cards" class="cards"></section>'
-        '<section><h2>任务和工艺信息</h2><div id="problemInfo"></div></section>'
+        '<section id="dayCards" class="cards"></section>'
         '<section class="inventory"><h2>工序产物库存</h2><div id="inventory"></div></section>'
         '<section><div class="toolbar"><h2>按工人看排程</h2></div><div id="workerChart"></div></section>'
         '<section><div class="toolbar"><h2>按机器看排程</h2></div><div id="machineChart"></div></section>'
